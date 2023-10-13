@@ -17844,7 +17844,8 @@ create_srgb_color_state (ClutterActor *self)
   ClutterColorState *color_state;
 
   /* create default sRGB color state */
-  color_state = clutter_color_state_new (CLUTTER_COLORSPACE_SRGB);
+  color_state = clutter_color_state_new (CLUTTER_COLORSPACE_SRGB,
+                                         CLUTTER_TRANSFER_FUNCTION_SRGB);
 
   return color_state;
 }
