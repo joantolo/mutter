@@ -57,6 +57,7 @@ enum
 
   PROP_COLORSPACE,
   PROP_TRANSFER_FUNCTION,
+  PROP_COLOR_ENCODING,
 
   N_PROPS
 };
@@ -74,6 +75,7 @@ struct _ClutterColorStatePrivate
 {
   ClutterColorspace colorspace;
   ClutterTransferFunction transfer_function;
+  ClutterColorEncoding color_encoding;
 };
 
 G_DEFINE_TYPE_WITH_PRIVATE (ClutterColorState,
@@ -106,6 +108,19 @@ clutter_color_state_get_transfer_function (ClutterColorState *color_state)
   return priv->transfer_function;
 }
 
+ClutterColorEncoding
+clutter_color_state_get_color_encoding (ClutterColorState *color_state)
+{
+  ClutterColorStatePrivate *priv;
+
+  g_return_val_if_fail (CLUTTER_IS_COLOR_STATE (color_state),
+                        CLUTTER_COLOR_ENCODING_ELECTRICAL);
+
+  priv = clutter_color_state_get_instance_private (color_state);
+
+  return priv->color_encoding;
+}
+
 static void
 clutter_color_state_set_property (GObject      *object,
                                   guint         prop_id,
@@ -125,6 +140,10 @@ clutter_color_state_set_property (GObject      *object,
 
     case PROP_TRANSFER_FUNCTION:
       priv->transfer_function = g_value_get_enum (value);
+      break;
+
+    case PROP_COLOR_ENCODING:
+      priv->color_encoding = g_value_get_enum (value);
       break;
 
     default:
@@ -151,6 +170,11 @@ clutter_color_state_get_property (GObject    *object,
     case PROP_TRANSFER_FUNCTION:
       g_value_set_enum (value,
                         clutter_color_state_get_transfer_function (color_state));
+      break;
+
+    case PROP_COLOR_ENCODING:
+      g_value_set_enum (value,
+                        clutter_color_state_get_color_encoding (color_state));
       break;
 
     default:
@@ -194,6 +218,19 @@ clutter_color_state_class_init (ClutterColorStateClass *klass)
                        G_PARAM_STATIC_STRINGS |
                        G_PARAM_CONSTRUCT_ONLY);
 
+  /**
+   * ClutterColorState:color-encoding:
+   *
+   * Color encoding.
+   */
+  obj_props[PROP_COLOR_ENCODING] =
+    g_param_spec_enum ("color-encoding", NULL, NULL,
+                       CLUTTER_TYPE_COLOR_ENCODING,
+                       CLUTTER_COLOR_ENCODING_ELECTRICAL,
+                       G_PARAM_READWRITE |
+                       G_PARAM_STATIC_STRINGS |
+                       G_PARAM_CONSTRUCT_ONLY);
+
   g_object_class_install_properties (gobject_class, N_PROPS, obj_props);
 }
 
@@ -211,10 +248,12 @@ clutter_color_state_init (ClutterColorState *color_state)
  **/
 ClutterColorState *
 clutter_color_state_new (ClutterColorspace       colorspace,
-                         ClutterTransferFunction transfer_function)
+                         ClutterTransferFunction transfer_function,
+                         ClutterColorEncoding    color_encoding)
 {
   return g_object_new (CLUTTER_TYPE_COLOR_STATE,
                        "colorspace", colorspace,
                        "transfer-function", transfer_function,
+                       "color-encoding", color_encoding,
                        NULL);
 }

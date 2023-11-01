@@ -1031,6 +1031,19 @@ typedef enum
 } ClutterTransferFunction;
 
 /**
+ * ClutterColorEncoding:
+ * @CLUTTER_COLOR_ENCODING_ELECTRICAL: Electrical (a.k.a. non-linear) encoding
+ * @CLUTTER_COLOR_ENCODING_OPTICAL: Optical (a.k.a. linear) encoding
+ *
+ * Color encoding.
+ */
+typedef enum _ClutterColorEncoding
+{
+  CLUTTER_COLOR_ENCODING_ELECTRICAL,
+  CLUTTER_COLOR_ENCODING_OPTICAL,
+} ClutterColorEncoding;
+
+/**
  * ClutterStepMode:
  * @CLUTTER_STEP_MODE_START: The change in the value of a
  *   %CLUTTER_STEP progress mode should occur at the start of
