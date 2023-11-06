@@ -52,6 +52,14 @@ CLUTTER_EXPORT
 void clutter_context_destroy (ClutterContext *context);
 
 /**
+ * clutter_context_get_context:
+ *
+ * Returns: (transfer none): The %ClutterContext
+ */
+CLUTTER_EXPORT
+ClutterContext * clutter_actor_get_context (ClutterActor *actor);
+
+/**
  * clutter_context_get_backend:
  *
  * Returns: (transfer none): The %ClutterBackend
