@@ -455,10 +455,16 @@ clutter_stage_do_paint_view (ClutterStage     *stage,
 
   fb = clutter_stage_view_get_framebuffer (view);
 
+  clutter_paint_context_push_color_state (paint_context,
+                                          clutter_actor_get_color_state (CLUTTER_ACTOR (stage)));
+
   root_node = clutter_root_node_new (fb, &bg_color, COGL_BUFFER_BIT_DEPTH);
   clutter_paint_node_set_static_name (root_node, "Stage (root)");
   clutter_paint_node_paint (root_node, paint_context);
   clutter_paint_node_unref (root_node);
+
+  clutter_paint_context_pop_color_state (paint_context,
+                                         clutter_actor_get_color_state (CLUTTER_ACTOR (stage)));
 
   clutter_actor_paint (CLUTTER_ACTOR (stage), paint_context);
   clutter_paint_context_destroy (paint_context);
