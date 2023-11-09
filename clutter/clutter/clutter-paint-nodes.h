@@ -127,9 +127,9 @@ CLUTTER_EXPORT
 GType clutter_root_node_get_type (void) G_GNUC_CONST;
 
 CLUTTER_EXPORT
-ClutterPaintNode *      clutter_root_node_new           (CoglFramebuffer       *framebuffer,
-                                                         const ClutterColor    *clear_color,
-                                                         CoglBufferBit          clear_flags);
+ClutterPaintNode * clutter_root_node_new (CoglFramebuffer *framebuffer,
+                                          float            alpha,
+                                          CoglBufferBit    clear_flags);
 
 #define CLUTTER_TYPE_LAYER_NODE                 (clutter_layer_node_get_type ())
 #define CLUTTER_LAYER_NODE(obj)                 (G_TYPE_CHECK_INSTANCE_CAST ((obj), CLUTTER_TYPE_LAYER_NODE, ClutterLayerNode))

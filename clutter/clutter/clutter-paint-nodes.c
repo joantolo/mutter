@@ -89,7 +89,7 @@ struct _ClutterRootNode
   CoglFramebuffer *framebuffer;
 
   CoglBufferBit clear_flags;
-  CoglColor clear_color;
+  float alpha;
 };
 
 G_DEFINE_TYPE (ClutterRootNode, clutter_root_node, CLUTTER_TYPE_PAINT_NODE)
@@ -102,9 +102,9 @@ clutter_root_node_pre_draw (ClutterPaintNode    *node,
 
   clutter_paint_context_push_framebuffer (paint_context, rnode->framebuffer);
 
-  cogl_framebuffer_clear (rnode->framebuffer,
-                          rnode->clear_flags,
-                          &rnode->clear_color);
+  cogl_framebuffer_clear4f (rnode->framebuffer,
+                            rnode->clear_flags,
+                            0.0, 0.0, 0.0, rnode->alpha);
 
   return TRUE;
 }
@@ -151,9 +151,9 @@ clutter_root_node_init (ClutterRootNode *self)
 }
 
 ClutterPaintNode *
-clutter_root_node_new (CoglFramebuffer    *framebuffer,
-                       const ClutterColor *clear_color,
-                       CoglBufferBit       clear_flags)
+clutter_root_node_new (CoglFramebuffer *framebuffer,
+                       float            alpha,
+                       CoglBufferBit    clear_flags)
 {
   ClutterRootNode *res;
 
@@ -161,14 +161,8 @@ clutter_root_node_new (CoglFramebuffer    *framebuffer,
 
   res = _clutter_paint_node_create (CLUTTER_TYPE_ROOT_NODE);
 
-  cogl_color_init_from_4f (&res->clear_color,
-                           clear_color->red / 255.0,
-                           clear_color->green / 255.0,
-                           clear_color->blue / 255.0,
-                           clear_color->alpha / 255.0);
-  cogl_color_premultiply (&res->clear_color);
-
   res->framebuffer = g_object_ref (framebuffer);
+  res->alpha = alpha;
   res->clear_flags = clear_flags;
 
   return (ClutterPaintNode *) res;
