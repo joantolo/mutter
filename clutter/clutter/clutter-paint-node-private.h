@@ -42,6 +42,8 @@ struct _ClutterPaintNode
 {
   GTypeInstance parent_instance;
 
+  ClutterContext *context;
+
   ClutterPaintNode *parent;
 
   ClutterPaintNode *first_child;
@@ -100,7 +102,8 @@ struct _ClutterPaintOperation
 GType _clutter_dummy_node_get_type (void) G_GNUC_CONST;
 
 void                    clutter_paint_node_init_types                   (ClutterBackend *clutter_backend);
-gpointer                _clutter_paint_node_create                      (GType gtype);
+gpointer                _clutter_paint_node_create                      (GType           gtype,
+                                                                         ClutterContext *context);
 
 ClutterPaintNode *      _clutter_dummy_node_new                         (ClutterActor                *actor,
                                                                          CoglFramebuffer             *framebuffer);

@@ -40,6 +40,7 @@ color_content_paint_content (ClutterContent      *content,
                              ClutterPaintContext *paint_context)
 {
   ColorContent *self = (ColorContent *) content;
+  ClutterContext *context = clutter_actor_get_context (actor);
   ClutterActorBox box, content_box;
   ClutterColor color;
   PangoLayout *layout;
@@ -72,7 +73,7 @@ color_content_paint_content (ClutterContent      *content,
   color.green = self->green * 255;
   color.blue = self->blue * 255;
 
-  node = clutter_color_node_new (&color);
+  node = clutter_color_node_new (context, &color);
   clutter_paint_node_add_rectangle (node, &box);
   clutter_paint_node_add_child (root, node);
   clutter_paint_node_unref (node);
@@ -84,7 +85,7 @@ color_content_paint_content (ClutterContent      *content,
   layout = clutter_actor_create_pango_layout (actor, "A");
   pango_layout_get_pixel_extents (layout, NULL, &logical);
 
-  node = clutter_text_node_new (layout, &color);
+  node = clutter_text_node_new (context, layout, &color);
 
   /* top-left */
   box.x1 = clutter_actor_box_get_x (&content_box);

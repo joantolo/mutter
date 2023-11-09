@@ -171,6 +171,8 @@ clutter_deform_effect_paint_target (ClutterOffscreenEffect *effect,
                                     ClutterPaintNode       *node,
                                     ClutterPaintContext    *paint_context)
 {
+  ClutterContext *context =
+    clutter_paint_context_get_context (paint_context);
   ClutterDeformEffect *self = CLUTTER_DEFORM_EFFECT (effect);
   ClutterDeformEffectPrivate *priv =
     clutter_deform_effect_get_instance_private (self);
@@ -290,7 +292,7 @@ clutter_deform_effect_paint_target (ClutterOffscreenEffect *effect,
     {
       ClutterPaintNode *front_node;
 
-      front_node = clutter_pipeline_node_new (pipeline);
+      front_node = clutter_pipeline_node_new (context, pipeline);
       clutter_paint_node_set_static_name (front_node,
                                           "ClutterDeformEffect (front)");
       clutter_paint_node_add_child (node, front_node);
@@ -312,7 +314,7 @@ clutter_deform_effect_paint_target (ClutterOffscreenEffect *effect,
                                         COGL_PIPELINE_CULL_FACE_MODE_FRONT);
 
 
-      back_node = clutter_pipeline_node_new (back_pipeline);
+      back_node = clutter_pipeline_node_new (context, back_pipeline);
       clutter_paint_node_set_static_name (back_node,
                                           "ClutterDeformEffect (back)");
       clutter_paint_node_add_child (node, back_node);
@@ -327,7 +329,7 @@ clutter_deform_effect_paint_target (ClutterOffscreenEffect *effect,
       static ClutterColor red = CLUTTER_COLOR_INIT (255, 0, 0, 255);
       ClutterPaintNode *lines_node;
 
-      lines_node = clutter_color_node_new (&red);
+      lines_node = clutter_color_node_new (context, &red);
       clutter_paint_node_set_static_name (lines_node,
                                           "ClutterDeformEffect (lines)");
       clutter_paint_node_add_child (node, lines_node);

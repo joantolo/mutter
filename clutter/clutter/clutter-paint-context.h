@@ -42,7 +42,8 @@ CLUTTER_EXPORT
 GType clutter_paint_context_get_type (void);
 
 CLUTTER_EXPORT
-ClutterPaintContext * clutter_paint_context_new_for_framebuffer (CoglFramebuffer   *framebuffer,
+ClutterPaintContext * clutter_paint_context_new_for_framebuffer (ClutterContext   *context,
+                                                                 CoglFramebuffer  *framebuffer,
                                                                  const MtkRegion   *redraw_clip,
                                                                  ClutterPaintFlag   paint_flags,
                                                                  ClutterColorState *color_state);
@@ -91,5 +92,8 @@ ClutterColorState * clutter_paint_context_get_target_color_state (ClutterPaintCo
 
 CLUTTER_EXPORT
 ClutterColorState * clutter_paint_context_get_color_state (ClutterPaintContext *paint_context);
+
+CLUTTER_EXPORT
+ClutterContext * clutter_paint_context_get_context (ClutterPaintContext *paint_context);
 
 G_DEFINE_AUTOPTR_CLEANUP_FUNC (ClutterPaintContext, clutter_paint_context_unref)

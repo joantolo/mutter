@@ -423,6 +423,8 @@ clutter_offscreen_effect_real_paint_target (ClutterOffscreenEffect *effect,
 {
   ClutterOffscreenEffectPrivate *priv =
     clutter_offscreen_effect_get_instance_private (effect);
+  ClutterContext *context =
+    clutter_paint_context_get_context (paint_context);
   ClutterPaintNode *pipeline_node;
   float paint_opacity;
   CoglColor color;
@@ -434,7 +436,7 @@ clutter_offscreen_effect_real_paint_target (ClutterOffscreenEffect *effect,
                            paint_opacity, paint_opacity);
   cogl_pipeline_set_color (priv->pipeline, &color);
 
-  pipeline_node = clutter_pipeline_node_new (priv->pipeline);
+  pipeline_node = clutter_pipeline_node_new (context, priv->pipeline);
   clutter_paint_node_set_static_name (pipeline_node,
                                       "ClutterOffscreenEffect (pipeline)");
   clutter_paint_node_add_child (node, pipeline_node);
@@ -461,6 +463,7 @@ clutter_offscreen_effect_paint_texture (ClutterOffscreenEffect *effect,
 {
   ClutterOffscreenEffectPrivate *priv =
     clutter_offscreen_effect_get_instance_private (effect);
+  ClutterContext *context = clutter_paint_context_get_context (paint_context);
   graphene_matrix_t transform;
   float unscale;
 
@@ -475,7 +478,7 @@ clutter_offscreen_effect_paint_texture (ClutterOffscreenEffect *effect,
     {
       ClutterPaintNode *transform_node;
 
-      transform_node = clutter_transform_node_new (&transform);
+      transform_node = clutter_transform_node_new (context, &transform);
       clutter_paint_node_set_static_name (transform_node,
                                           "ClutterOffscreenEffect (transform)");
       clutter_paint_node_add_child (node, transform_node);
@@ -529,11 +532,12 @@ clutter_offscreen_effect_paint_node (ClutterEffect           *effect,
   ClutterOffscreenEffect *offscreen_effect = CLUTTER_OFFSCREEN_EFFECT (effect);
   ClutterOffscreenEffectPrivate *priv =
     clutter_offscreen_effect_get_instance_private (offscreen_effect);
+  ClutterContext *context = clutter_paint_context_get_context (paint_context);
   ClutterPaintNode *layer_node;
   CoglFramebuffer *fb;
 
   fb = COGL_FRAMEBUFFER (priv->offscreen);
-  layer_node = clutter_layer_node_new_to_framebuffer (fb, priv->pipeline);
+  layer_node = clutter_layer_node_new_to_framebuffer (context, fb, priv->pipeline);
   clutter_paint_node_set_static_name (layer_node,
                                       "ClutterOffscreenEffect (actor offscreen)");
   clutter_paint_node_add_child (node, layer_node);

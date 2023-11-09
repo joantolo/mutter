@@ -151,7 +151,8 @@ clutter_root_node_init (ClutterRootNode *self)
 }
 
 ClutterPaintNode *
-clutter_root_node_new (CoglFramebuffer *framebuffer,
+clutter_root_node_new (ClutterContext  *context,
+                       CoglFramebuffer *framebuffer,
                        float            alpha,
                        CoglBufferBit    clear_flags)
 {
@@ -159,7 +160,7 @@ clutter_root_node_new (CoglFramebuffer *framebuffer,
 
   g_return_val_if_fail (framebuffer, NULL);
 
-  res = _clutter_paint_node_create (CLUTTER_TYPE_ROOT_NODE);
+  res = _clutter_paint_node_create (CLUTTER_TYPE_ROOT_NODE, context);
 
   res->framebuffer = g_object_ref (framebuffer);
   res->alpha = alpha;
@@ -234,11 +235,12 @@ clutter_transform_node_init (ClutterTransformNode *self)
  *   Use clutter_paint_node_unref() when done.
  */
 ClutterPaintNode *
-clutter_transform_node_new (const graphene_matrix_t *transform)
+clutter_transform_node_new (ClutterContext          *context,
+                            const graphene_matrix_t *transform)
 {
   ClutterTransformNode *res;
 
-  res = _clutter_paint_node_create (CLUTTER_TYPE_TRANSFORM_NODE);
+  res = _clutter_paint_node_create (CLUTTER_TYPE_TRANSFORM_NODE, context);
   if (transform)
     graphene_matrix_init_from_matrix (&res->transform, transform);
 
@@ -314,7 +316,8 @@ _clutter_dummy_node_new (ClutterActor    *actor,
   ClutterPaintNode *res;
   ClutterDummyNode *dnode;
 
-  res = _clutter_paint_node_create (_clutter_dummy_node_get_type ());
+  res = _clutter_paint_node_create (_clutter_dummy_node_get_type (),
+                                    clutter_actor_get_context (actor));
 
   dnode = (ClutterDummyNode *) res;
   dnode->actor = actor;
@@ -487,13 +490,14 @@ clutter_pipeline_node_init (ClutterPipelineNode *self)
  *   Use clutter_paint_node_unref() when done.
  */
 ClutterPaintNode *
-clutter_pipeline_node_new (CoglPipeline *pipeline)
+clutter_pipeline_node_new (ClutterContext *context,
+                           CoglPipeline   *pipeline)
 {
   ClutterPipelineNode *res;
 
   g_return_val_if_fail (pipeline == NULL || COGL_IS_PIPELINE (pipeline), NULL);
 
-  res = _clutter_paint_node_create (CLUTTER_TYPE_PIPELINE_NODE);
+  res = _clutter_paint_node_create (CLUTTER_TYPE_PIPELINE_NODE, context);
 
   if (pipeline != NULL)
     res->pipeline = g_object_ref (pipeline);
@@ -549,11 +553,12 @@ clutter_color_node_init (ClutterColorNode *cnode)
  *   clutter_paint_node_unref() when done
  */
 ClutterPaintNode *
-clutter_color_node_new (const ClutterColor *color)
+clutter_color_node_new (ClutterContext     *context,
+                        const ClutterColor *color)
 {
   ClutterPipelineNode *cnode;
 
-  cnode = _clutter_paint_node_create (CLUTTER_TYPE_COLOR_NODE);
+  cnode = _clutter_paint_node_create (CLUTTER_TYPE_COLOR_NODE, context);
 
   if (color != NULL)
     {
@@ -647,7 +652,8 @@ clutter_scaling_filter_to_cogl_pipeline_filter (ClutterScalingFilter filter)
  *   Use clutter_paint_node_unref() when done
  */
 ClutterPaintNode *
-clutter_texture_node_new (CoglTexture          *texture,
+clutter_texture_node_new (ClutterContext       *context,
+                          CoglTexture          *texture,
                           const ClutterColor   *color,
                           ClutterScalingFilter  min_filter,
                           ClutterScalingFilter  mag_filter)
@@ -658,7 +664,7 @@ clutter_texture_node_new (CoglTexture          *texture,
 
   g_return_val_if_fail (COGL_IS_TEXTURE (texture), NULL);
 
-  tnode = _clutter_paint_node_create (CLUTTER_TYPE_TEXTURE_NODE);
+  tnode = _clutter_paint_node_create (CLUTTER_TYPE_TEXTURE_NODE, context);
 
   cogl_pipeline_set_layer_texture (tnode->pipeline, 0, texture);
 
@@ -823,14 +829,15 @@ clutter_text_node_init (ClutterTextNode *self)
  *   Use clutter_paint_node_unref() when done
  */
 ClutterPaintNode *
-clutter_text_node_new (PangoLayout        *layout,
+clutter_text_node_new (ClutterContext     *context,
+                       PangoLayout        *layout,
                        const ClutterColor *color)
 {
   ClutterTextNode *res;
 
   g_return_val_if_fail (layout == NULL || PANGO_IS_LAYOUT (layout), NULL);
 
-  res = _clutter_paint_node_create (CLUTTER_TYPE_TEXT_NODE);
+  res = _clutter_paint_node_create (CLUTTER_TYPE_TEXT_NODE, context);
 
   if (layout != NULL)
     res->layout = g_object_ref (layout);
@@ -967,9 +974,9 @@ clutter_clip_node_init (ClutterClipNode *self)
  *   Use clutter_paint_node_unref() when done.
  */
 ClutterPaintNode *
-clutter_clip_node_new (void)
+clutter_clip_node_new (ClutterContext *context)
 {
-  return _clutter_paint_node_create (CLUTTER_TYPE_CLIP_NODE);
+  return _clutter_paint_node_create (CLUTTER_TYPE_CLIP_NODE, context);
 }
 
 /**
@@ -1073,7 +1080,8 @@ clutter_actor_node_new (ClutterActor *actor,
 
   g_assert (actor != NULL);
 
-  res = _clutter_paint_node_create (CLUTTER_TYPE_ACTOR_NODE);
+  res = _clutter_paint_node_create (CLUTTER_TYPE_ACTOR_NODE,
+                                    clutter_actor_get_context (actor));
   res->actor = actor;
   res->opacity_override = CLAMP (opacity, -1, 255);
 
@@ -1121,11 +1129,14 @@ clutter_effect_node_init (ClutterEffectNode *self)
 ClutterPaintNode *
 clutter_effect_node_new (ClutterEffect *effect)
 {
+  ClutterActorMeta *actor_meta = CLUTTER_ACTOR_META (effect);
+  ClutterActor *actor = clutter_actor_meta_get_actor (actor_meta);
   ClutterEffectNode *res;
 
   g_assert (CLUTTER_IS_EFFECT (effect));
 
-  res = _clutter_paint_node_create (CLUTTER_TYPE_EFFECT_NODE);
+  res = _clutter_paint_node_create (CLUTTER_TYPE_EFFECT_NODE,
+                                    clutter_actor_get_context (actor));
   res->effect = effect;
 
   return (ClutterPaintNode *) res;
@@ -1296,7 +1307,8 @@ clutter_layer_node_init (ClutterLayerNode *self)
  *   Use clutter_paint_node_unref() when done.
  */
 ClutterPaintNode *
-clutter_layer_node_new_to_framebuffer (CoglFramebuffer *framebuffer,
+clutter_layer_node_new_to_framebuffer (ClutterContext  *context,
+                                       CoglFramebuffer *framebuffer,
                                        CoglPipeline    *pipeline)
 {
   ClutterLayerNode *res;
@@ -1304,7 +1316,7 @@ clutter_layer_node_new_to_framebuffer (CoglFramebuffer *framebuffer,
   g_return_val_if_fail (COGL_IS_FRAMEBUFFER (framebuffer), NULL);
   g_return_val_if_fail (COGL_IS_PIPELINE (pipeline), NULL);
 
-  res = _clutter_paint_node_create (CLUTTER_TYPE_LAYER_NODE);
+  res = _clutter_paint_node_create (CLUTTER_TYPE_LAYER_NODE, context);
 
   res->fbo_width = cogl_framebuffer_get_width (framebuffer);
   res->fbo_height = cogl_framebuffer_get_height (framebuffer);
@@ -1428,13 +1440,14 @@ clutter_blit_node_init (ClutterBlitNode *self)
  *   Use clutter_paint_node_unref() when done.
  */
 ClutterPaintNode *
-clutter_blit_node_new (CoglFramebuffer *src)
+clutter_blit_node_new (ClutterContext  *context,
+                       CoglFramebuffer *src)
 {
   ClutterBlitNode *res;
 
   g_return_val_if_fail (COGL_IS_FRAMEBUFFER (src), NULL);
 
-  res = _clutter_paint_node_create (CLUTTER_TYPE_BLIT_NODE);
+  res = _clutter_paint_node_create (CLUTTER_TYPE_BLIT_NODE, context);
   res->src = g_object_ref (src);
 
   return (ClutterPaintNode *) res;
@@ -1544,24 +1557,27 @@ clutter_blur_node_init (ClutterBlurNode *blur_node)
  *   Use clutter_paint_node_unref() when done.
  */
 ClutterPaintNode *
-clutter_blur_node_new (unsigned int width,
-                       unsigned int height,
-                       float        radius)
+clutter_blur_node_new (ClutterContext *context,
+                       unsigned int    width,
+                       unsigned int    height,
+                       float           radius)
 {
   g_autoptr (CoglOffscreen) offscreen = NULL;
   g_autoptr (GError) error = NULL;
   ClutterLayerNode *layer_node;
   ClutterBlurNode *blur_node;
-  CoglContext *context;
+  ClutterBackend *backend;
+  CoglContext *cogl_context;
   CoglTexture *texture;
   ClutterBlur *blur;
 
   g_return_val_if_fail (radius >= 0.0, NULL);
 
-  blur_node = _clutter_paint_node_create (CLUTTER_TYPE_BLUR_NODE);
+  blur_node = _clutter_paint_node_create (CLUTTER_TYPE_BLUR_NODE, context);
   blur_node->radius = radius;
-  context = clutter_backend_get_cogl_context (clutter_get_default_backend ());
-  texture = cogl_texture_2d_new_with_size (context, width, height);
+  backend = clutter_context_get_backend (context);
+  cogl_context = clutter_backend_get_cogl_context (backend);
+  texture = cogl_texture_2d_new_with_size (cogl_context, width, height);
 
   cogl_texture_set_premultiplied (texture, TRUE);
 

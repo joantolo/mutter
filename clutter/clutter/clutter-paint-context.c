@@ -27,6 +27,7 @@ struct _ClutterPaintContext
 {
   grefcount ref_count;
 
+  ClutterContext *context;
   ClutterPaintFlag paint_flags;
 
   GList *framebuffers;
@@ -48,7 +49,8 @@ G_DEFINE_BOXED_TYPE (ClutterPaintContext, clutter_paint_context,
                      clutter_paint_context_unref)
 
 ClutterPaintContext *
-clutter_paint_context_new_for_view (ClutterStageView *view,
+clutter_paint_context_new_for_view (ClutterContext   *context,
+                                    ClutterStageView *view,
                                     const MtkRegion  *redraw_clip,
                                     GArray           *clip_frusta,
                                     ClutterPaintFlag  paint_flags)
@@ -59,6 +61,7 @@ clutter_paint_context_new_for_view (ClutterStageView *view,
 
   paint_context = g_new0 (ClutterPaintContext, 1);
   g_ref_count_init (&paint_context->ref_count);
+  paint_context->context = context;
   paint_context->view = view;
   paint_context->redraw_clip = mtk_region_copy (redraw_clip);
   paint_context->clip_frusta = g_array_ref (clip_frusta);
@@ -80,7 +83,8 @@ clutter_paint_context_new_for_view (ClutterStageView *view,
  * clutter_paint_context_new_for_framebuffer: (skip)
  */
 ClutterPaintContext *
-clutter_paint_context_new_for_framebuffer (CoglFramebuffer   *framebuffer,
+clutter_paint_context_new_for_framebuffer (ClutterContext   *context,
+                                           CoglFramebuffer  *framebuffer,
                                            const MtkRegion   *redraw_clip,
                                            ClutterPaintFlag   paint_flags,
                                            ClutterColorState *color_state)
@@ -90,6 +94,7 @@ clutter_paint_context_new_for_framebuffer (CoglFramebuffer   *framebuffer,
 
   paint_context = g_new0 (ClutterPaintContext, 1);
   g_ref_count_init (&paint_context->ref_count);
+  paint_context->context = context;
   paint_context->paint_flags = paint_flags;
   g_set_object (&paint_context->framebuffer_color_state, color_state);
 
@@ -322,4 +327,13 @@ clutter_paint_context_get_color_state (ClutterPaintContext *paint_context)
   g_return_val_if_fail (paint_context->color_states, NULL);
 
   return CLUTTER_COLOR_STATE (paint_context->color_states->data);
+}
+
+/**
+  * clutter_paint_context_get_context: (skip)
+  */
+ClutterContext *
+clutter_paint_context_get_context (ClutterPaintContext *paint_context)
+{
+  return paint_context->context;
 }

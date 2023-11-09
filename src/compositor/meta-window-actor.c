@@ -1414,6 +1414,7 @@ meta_window_actor_blit_to_framebuffer (MetaScreenCastWindow *screen_cast_window,
   MetaWindowActorPrivate *priv =
     meta_window_actor_get_instance_private (window_actor);
   ClutterActor *actor = CLUTTER_ACTOR (window_actor);
+  ClutterContext *clutter_context = clutter_actor_get_context (actor);
   ClutterPaintContext *paint_context;
   graphene_rect_t scaled_clip;
   CoglColor clear_color;
@@ -1480,7 +1481,8 @@ meta_window_actor_blit_to_framebuffer (MetaScreenCastWindow *screen_cast_window,
   cogl_framebuffer_transform (framebuffer, &inverted_transform);
 
   paint_context =
-    clutter_paint_context_new_for_framebuffer (framebuffer, NULL,
+    clutter_paint_context_new_for_framebuffer (clutter_context,
+                                               framebuffer, NULL,
                                                CLUTTER_PAINT_FLAG_NONE,
                                                clutter_actor_get_color_state (actor));
   clutter_actor_paint (actor, paint_context);
@@ -1576,6 +1578,7 @@ create_framebuffer_from_window_actor (MetaWindowActor  *self,
   MetaDisplay *display = meta_compositor_get_display (priv->compositor);
   MetaContext *context = meta_display_get_context (display);
   MetaBackend *backend = meta_context_get_backend (context);
+  ClutterContext *clutter_context = clutter_actor_get_context (actor);
   ClutterBackend *clutter_backend = meta_backend_get_clutter_backend (backend);
   CoglContext *cogl_context =
     clutter_backend_get_cogl_context (clutter_backend);
@@ -1614,7 +1617,8 @@ create_framebuffer_from_window_actor (MetaWindowActor  *self,
   cogl_framebuffer_translate (framebuffer, -clip->x, -clip->y, 0);
 
   paint_context =
-    clutter_paint_context_new_for_framebuffer (framebuffer, NULL,
+    clutter_paint_context_new_for_framebuffer (clutter_context,
+                                               framebuffer, NULL,
                                                CLUTTER_PAINT_FLAG_NONE,
                                                clutter_actor_get_color_state (actor));
   clutter_actor_paint (actor, paint_context);

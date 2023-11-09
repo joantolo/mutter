@@ -44,7 +44,8 @@ CLUTTER_EXPORT
 GType clutter_color_node_get_type (void) G_GNUC_CONST;
 
 CLUTTER_EXPORT
-ClutterPaintNode *      clutter_color_node_new          (const ClutterColor    *color);
+ClutterPaintNode *      clutter_color_node_new          (ClutterContext     *context,
+                                                         const ClutterColor *color);
 
 #define CLUTTER_TYPE_TEXTURE_NODE               (clutter_texture_node_get_type ())
 #define CLUTTER_TEXTURE_NODE(obj)               (G_TYPE_CHECK_INSTANCE_CAST ((obj), CLUTTER_TYPE_TEXTURE_NODE, ClutterTextureNode))
@@ -57,10 +58,11 @@ CLUTTER_EXPORT
 GType clutter_texture_node_get_type (void) G_GNUC_CONST;
 
 CLUTTER_EXPORT
-ClutterPaintNode *      clutter_texture_node_new        (CoglTexture           *texture,
-                                                         const ClutterColor    *color,
-                                                         ClutterScalingFilter   min_filter,
-                                                         ClutterScalingFilter   mag_filter);
+ClutterPaintNode *      clutter_texture_node_new        (ClutterContext       *context,
+                                                         CoglTexture          *texture,
+                                                         const ClutterColor   *color,
+                                                         ClutterScalingFilter  min_filter,
+                                                         ClutterScalingFilter  mag_filter);
 
 #define CLUTTER_TYPE_CLIP_NODE                  (clutter_clip_node_get_type ())
 #define CLUTTER_CLIP_NODE(obj)                  (G_TYPE_CHECK_INSTANCE_CAST ((obj), CLUTTER_TYPE_CLIP_NODE, ClutterClipNode))
@@ -73,7 +75,7 @@ CLUTTER_EXPORT
 GType clutter_clip_node_get_type (void) G_GNUC_CONST;
 
 CLUTTER_EXPORT
-ClutterPaintNode *      clutter_clip_node_new           (void);
+ClutterPaintNode *      clutter_clip_node_new           (ClutterContext *context);
 
 #define CLUTTER_TYPE_PIPELINE_NODE              (clutter_pipeline_node_get_type ())
 #define CLUTTER_PIPELINE_NODE(obj)              (G_TYPE_CHECK_INSTANCE_CAST ((obj), CLUTTER_TYPE_PIPELINE_NODE, ClutterPipelineNode))
@@ -86,7 +88,8 @@ CLUTTER_EXPORT
 GType clutter_pipeline_node_get_type (void) G_GNUC_CONST;
 
 CLUTTER_EXPORT
-ClutterPaintNode *      clutter_pipeline_node_new       (CoglPipeline          *pipeline);
+ClutterPaintNode *      clutter_pipeline_node_new       (ClutterContext *context,
+                                                         CoglPipeline   *pipeline);
 
 #define CLUTTER_TYPE_TEXT_NODE                  (clutter_text_node_get_type ())
 #define CLUTTER_TEXT_NODE(obj)                  (G_TYPE_CHECK_INSTANCE_CAST ((obj), CLUTTER_TYPE_TEXT_NODE, ClutterTextNode))
@@ -99,8 +102,9 @@ CLUTTER_EXPORT
 GType clutter_text_node_get_type (void) G_GNUC_CONST;
 
 CLUTTER_EXPORT
-ClutterPaintNode *      clutter_text_node_new           (PangoLayout           *layout,
-                                                         const ClutterColor    *color);
+ClutterPaintNode *      clutter_text_node_new           (ClutterContext     *context,
+                                                         PangoLayout        *layout,
+                                                         const ClutterColor *color);
 
 #define CLUTTER_TYPE_ACTOR_NODE                 (clutter_actor_node_get_type ())
 #define CLUTTER_ACTOR_NODE(obj)                 (G_TYPE_CHECK_INSTANCE_CAST ((obj), CLUTTER_TYPE_ACTOR_NODE, ClutterActorNode))
@@ -127,7 +131,8 @@ CLUTTER_EXPORT
 GType clutter_root_node_get_type (void) G_GNUC_CONST;
 
 CLUTTER_EXPORT
-ClutterPaintNode * clutter_root_node_new (CoglFramebuffer *framebuffer,
+ClutterPaintNode * clutter_root_node_new (ClutterContext  *context,
+                                          CoglFramebuffer *framebuffer,
                                           float            alpha,
                                           CoglBufferBit    clear_flags);
 
@@ -142,7 +147,8 @@ CLUTTER_EXPORT
 GType clutter_layer_node_get_type (void) G_GNUC_CONST;
 
 CLUTTER_EXPORT
-ClutterPaintNode * clutter_layer_node_new_to_framebuffer (CoglFramebuffer *framebuffer,
+ClutterPaintNode * clutter_layer_node_new_to_framebuffer (ClutterContext  *context,
+                                                          CoglFramebuffer *framebuffer,
                                                           CoglPipeline    *pipeline);
 
 
@@ -157,7 +163,8 @@ CLUTTER_EXPORT
 GType clutter_transform_node_get_type (void) G_GNUC_CONST;
 
 CLUTTER_EXPORT
-ClutterPaintNode *      clutter_transform_node_new          (const graphene_matrix_t *projection);
+ClutterPaintNode *      clutter_transform_node_new          (ClutterContext          *context,
+                                                             const graphene_matrix_t *projection);
 
 #define CLUTTER_TYPE_BLIT_NODE                  (clutter_blit_node_get_type ())
 #define CLUTTER_BLIT_NODE(obj)                  (G_TYPE_CHECK_INSTANCE_CAST ((obj), CLUTTER_TYPE_BLIT_NODE, ClutterBlitNode))
@@ -170,7 +177,8 @@ CLUTTER_EXPORT
 GType clutter_blit_node_get_type (void) G_GNUC_CONST;
 
 CLUTTER_EXPORT
-ClutterPaintNode * clutter_blit_node_new (CoglFramebuffer *src);
+ClutterPaintNode * clutter_blit_node_new (ClutterContext  *context,
+                                          CoglFramebuffer *src);
 
 CLUTTER_EXPORT
 void clutter_blit_node_add_blit_rectangle (ClutterBlitNode *blit_node,
@@ -192,8 +200,9 @@ CLUTTER_EXPORT
 GType clutter_blur_node_get_type (void) G_GNUC_CONST;
 
 CLUTTER_EXPORT
-ClutterPaintNode * clutter_blur_node_new (unsigned int width,
-                                          unsigned int height,
-                                          float        radius);
+ClutterPaintNode * clutter_blur_node_new (ClutterContext *context,
+                                          unsigned int    width,
+                                          unsigned int    height,
+                                          float           radius);
 
 G_END_DECLS

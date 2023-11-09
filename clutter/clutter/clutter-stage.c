@@ -400,6 +400,7 @@ clutter_stage_do_paint_view (ClutterStage     *stage,
                              ClutterFrame     *frame,
                              const MtkRegion  *redraw_clip)
 {
+  ClutterContext *context = clutter_actor_get_context (CLUTTER_ACTOR (stage));
   ClutterPaintContext *paint_context;
   MtkRectangle clip_rect;
   g_autoptr (GArray) clip_frusta = NULL;
@@ -441,7 +442,8 @@ clutter_stage_do_paint_view (ClutterStage     *stage,
 
   paint_flags = clutter_stage_view_get_default_paint_flags (view);
 
-  paint_context = clutter_paint_context_new_for_view (view,
+  paint_context = clutter_paint_context_new_for_view (context,
+                                                      view,
                                                       redraw_clip,
                                                       clip_frusta,
                                                       paint_flags);
@@ -454,7 +456,7 @@ clutter_stage_do_paint_view (ClutterStage     *stage,
   clutter_paint_context_push_color_state (paint_context,
                                           clutter_actor_get_color_state (CLUTTER_ACTOR (stage)));
 
-  root_node = clutter_root_node_new (fb, 1.0, COGL_BUFFER_BIT_DEPTH);
+  root_node = clutter_root_node_new (context, fb, 1.0, COGL_BUFFER_BIT_DEPTH);
   clutter_paint_node_set_static_name (root_node, "Stage (root)");
   clutter_paint_node_paint (root_node, paint_context);
   clutter_paint_node_unref (root_node);
@@ -1243,6 +1245,8 @@ static void
 clutter_stage_paint (ClutterActor        *actor,
                      ClutterPaintContext *paint_context)
 {
+  ClutterContext *context =
+    clutter_paint_context_get_context (paint_context);
   ClutterStageView *view;
 
   CLUTTER_ACTOR_CLASS (clutter_stage_parent_class)->paint (actor, paint_context);
@@ -1270,7 +1274,7 @@ clutter_stage_paint (ClutterActor        *actor,
       pango_layout_get_pixel_extents (layout, NULL, &logical);
 
       clutter_color_init (&color, 255, 255, 255, 255);
-      node = clutter_text_node_new (layout, &color);
+      node = clutter_text_node_new (context, layout, &color);
 
       box.x1 = view_layout.x;
       box.y1 = view_layout.y + 30;
@@ -2667,6 +2671,7 @@ clutter_stage_paint_to_framebuffer (ClutterStage                *stage,
                                     ClutterPaintFlag             paint_flags)
 {
   ClutterStagePrivate *priv = clutter_stage_get_instance_private (stage);
+  ClutterContext *context = clutter_actor_get_context (CLUTTER_ACTOR (stage));
   ClutterPaintContext *paint_context;
   g_autoptr (MtkRegion) redraw_clip = NULL;
   ClutterColorState *color_state;
@@ -2686,7 +2691,8 @@ clutter_stage_paint_to_framebuffer (ClutterStage                *stage,
   color_state =
     clutter_actor_get_color_state (CLUTTER_ACTOR (stage));
   paint_context =
-    clutter_paint_context_new_for_framebuffer (framebuffer,
+    clutter_paint_context_new_for_framebuffer (context,
+                                               framebuffer,
                                                redraw_clip,
                                                paint_flags,
                                                color_state);

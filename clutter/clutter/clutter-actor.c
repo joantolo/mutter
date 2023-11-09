@@ -3020,6 +3020,7 @@ _clutter_actor_draw_paint_volume_full (ClutterActor       *self,
                                        const ClutterColor *color,
                                        ClutterPaintNode   *node)
 {
+  ClutterContext *context = clutter_actor_get_context (self);
   g_autoptr (ClutterPaintNode) pipeline_node = NULL;
   static CoglPipeline *outline = NULL;
   CoglPrimitive *prim;
@@ -3068,7 +3069,7 @@ _clutter_actor_draw_paint_volume_full (ClutterActor       *self,
                            color->alpha / 255.0);
   cogl_pipeline_set_color (outline, &cogl_color);
 
-  pipeline_node = clutter_pipeline_node_new (outline);
+  pipeline_node = clutter_pipeline_node_new (context, outline);
   clutter_paint_node_set_static_name (pipeline_node,
                                       "ClutterActor (paint volume outline)");
   clutter_paint_node_add_primitive (pipeline_node, prim);
@@ -3375,7 +3376,7 @@ clutter_actor_paint_node (ClutterActor        *actor,
                      * priv->bg_color.alpha
                      / 255;
 
-      node = clutter_color_node_new (&bg_color);
+      node = clutter_color_node_new (priv->context, &bg_color);
       clutter_paint_node_set_static_name (node, "backgroundColor");
       clutter_paint_node_add_rectangle (node, &box);
       clutter_paint_node_add_child (root, node);
@@ -3486,7 +3487,7 @@ clutter_actor_paint (ClutterActor        *self,
     {
       ClutterPaintNode *clip_node;
 
-      clip_node = clutter_clip_node_new ();
+      clip_node = clutter_clip_node_new (priv->context);
       clutter_paint_node_add_rectangle (clip_node, &clip);
       clutter_paint_node_add_child (clip_node, root_node);
       clutter_paint_node_unref (root_node);
@@ -3503,7 +3504,8 @@ clutter_actor_paint (ClutterActor        *self,
 
       if (!graphene_matrix_is_identity (&transform))
         {
-          transform_node = clutter_transform_node_new (&transform);
+          transform_node = clutter_transform_node_new (priv->context,
+                                                       &transform);
           clutter_paint_node_add_child (transform_node, root_node);
           clutter_paint_node_unref (root_node);
 
@@ -18416,7 +18418,10 @@ clutter_actor_create_texture_paint_node (ClutterActor *self,
   color.blue = 255;
   color.alpha = clutter_actor_get_paint_opacity_internal (self);
 
-  node = clutter_texture_node_new (texture, &color, priv->min_filter, priv->mag_filter);
+  node = clutter_texture_node_new (priv->context,
+                                   texture,
+                                   &color,
+                                   priv->min_filter, priv->mag_filter);
   clutter_paint_node_set_static_name (node, "Texture");
 
   if (priv->content_repeat == CLUTTER_REPEAT_NONE)

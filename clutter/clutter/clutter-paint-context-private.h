@@ -20,7 +20,8 @@
 #include "clutter/clutter-paint-context.h"
 
 ClutterPaintContext *
-clutter_paint_context_new_for_view (ClutterStageView *view,
+clutter_paint_context_new_for_view (ClutterContext   *context,
+                                    ClutterStageView *view,
                                     const MtkRegion  *redraw_clip,
                                     GArray           *clip_frusta,
                                     ClutterPaintFlag  paint_flags);

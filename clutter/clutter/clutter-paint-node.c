@@ -890,11 +890,17 @@ clutter_paint_node_paint (ClutterPaintNode    *node,
  *   sub-class instance; use clutter_paint_node_unref() when done
  */
 gpointer
-_clutter_paint_node_create (GType gtype)
+_clutter_paint_node_create (GType           gtype,
+                            ClutterContext *context)
 {
+  ClutterPaintNode *node;
+
   g_return_val_if_fail (g_type_is_a (gtype, CLUTTER_TYPE_PAINT_NODE), NULL);
 
-  return (gpointer) g_type_create_instance (gtype);
+  node = CLUTTER_PAINT_NODE (g_type_create_instance (gtype));
+  node->context = context;
+
+  return node;
 }
 
 /**

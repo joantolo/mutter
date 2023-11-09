@@ -751,7 +751,7 @@ paint_clipped_rectangle_node (MetaShapedTexture *stex,
   coords[6] = coords[2];
   coords[7] = coords[3];
 
-  node = clutter_pipeline_node_new (pipeline);
+  node = clutter_pipeline_node_new (stex->clutter_context, pipeline);
   clutter_paint_node_set_static_name (node, "MetaShapedTexture (clipped)");
   clutter_paint_node_add_child (root_node, node);
 
@@ -1067,7 +1067,8 @@ do_paint_content (MetaShapedTexture   *stex,
         {
           g_autoptr (ClutterPaintNode) node = NULL;
 
-          node = clutter_pipeline_node_new (blended_pipeline);
+          node = clutter_pipeline_node_new (stex->clutter_context,
+                                            blended_pipeline);
           clutter_paint_node_set_static_name (node, "MetaShapedTexture (unclipped)");
           clutter_paint_node_add_child (root_node, node);
 
@@ -1081,7 +1082,8 @@ do_paint_content (MetaShapedTexture   *stex,
 
               blended_overlay_pipeline = get_blended_overlay_pipeline (paint_context);
 
-              node_overlay = clutter_pipeline_node_new (blended_overlay_pipeline);
+              node_overlay = clutter_pipeline_node_new (stex->clutter_context,
+                                                        blended_overlay_pipeline);
               clutter_paint_node_set_static_name (node_overlay,
                                                   "MetaShapedTexture (unclipped overlay)");
               clutter_paint_node_add_child (root_node, node_overlay);
