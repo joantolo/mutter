@@ -68,6 +68,7 @@ typedef struct _ClutterStageViewPrivate
   MtkRectangle layout;
   float scale;
   CoglFramebuffer *framebuffer;
+  ClutterColorState *color_state;
 
   CoglOffscreen *offscreen;
   CoglPipeline *offscreen_pipeline;
@@ -1098,6 +1099,10 @@ clutter_stage_view_constructed (GObject *object)
                                                &frame_clock_listener_iface,
                                                view);
 
+  priv->color_state = clutter_color_state_new (CLUTTER_COLORSPACE_SRGB,
+                                               CLUTTER_TRANSFER_FUNCTION_SRGB,
+                                               CLUTTER_COLOR_ENCODING_ELECTRICAL);
+
   clutter_stage_view_add_redraw_clip (view, NULL);
   clutter_stage_view_schedule_update (view);
 
@@ -1117,6 +1122,7 @@ clutter_stage_view_dispose (GObject *object)
 
   g_clear_object (&priv->shadow.framebuffer);
 
+  g_clear_object (&priv->color_state);
   g_clear_object (&priv->offscreen);
   g_clear_object (&priv->offscreen_pipeline);
   g_clear_pointer (&priv->redraw_clip, mtk_region_unref);
@@ -1257,4 +1263,13 @@ clutter_stage_view_get_default_paint_flags (ClutterStageView *view)
     return view_class->get_default_paint_flags (view);
   else
     return CLUTTER_PAINT_FLAG_NONE;
+}
+
+ClutterColorState *
+clutter_stage_view_get_color_state (ClutterStageView *view)
+{
+  ClutterStageViewPrivate *priv =
+    clutter_stage_view_get_instance_private (view);
+
+  return priv->color_state;
 }
