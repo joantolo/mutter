@@ -42,9 +42,10 @@ CLUTTER_EXPORT
 GType clutter_paint_context_get_type (void);
 
 CLUTTER_EXPORT
-ClutterPaintContext * clutter_paint_context_new_for_framebuffer (CoglFramebuffer  *framebuffer,
-                                                                 const MtkRegion  *redraw_clip,
-                                                                 ClutterPaintFlag  paint_flags);
+ClutterPaintContext * clutter_paint_context_new_for_framebuffer (CoglFramebuffer   *framebuffer,
+                                                                 const MtkRegion   *redraw_clip,
+                                                                 ClutterPaintFlag   paint_flags,
+                                                                 ClutterColorState *color_state);
 
 CLUTTER_EXPORT
 ClutterPaintContext * clutter_paint_context_ref (ClutterPaintContext *paint_context);

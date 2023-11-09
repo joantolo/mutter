@@ -80,9 +80,10 @@ clutter_paint_context_new_for_view (ClutterStageView *view,
  * clutter_paint_context_new_for_framebuffer: (skip)
  */
 ClutterPaintContext *
-clutter_paint_context_new_for_framebuffer (CoglFramebuffer  *framebuffer,
-                                           const MtkRegion  *redraw_clip,
-                                           ClutterPaintFlag  paint_flags)
+clutter_paint_context_new_for_framebuffer (CoglFramebuffer   *framebuffer,
+                                           const MtkRegion   *redraw_clip,
+                                           ClutterPaintFlag   paint_flags,
+                                           ClutterColorState *color_state)
 {
   ClutterPaintContext *paint_context;
   ClutterColorState *target_color_state;
@@ -90,10 +91,7 @@ clutter_paint_context_new_for_framebuffer (CoglFramebuffer  *framebuffer,
   paint_context = g_new0 (ClutterPaintContext, 1);
   g_ref_count_init (&paint_context->ref_count);
   paint_context->paint_flags = paint_flags;
-  paint_context->framebuffer_color_state =
-    clutter_color_state_new (CLUTTER_COLORSPACE_SRGB,
-                             CLUTTER_TRANSFER_FUNCTION_SRGB,
-                             CLUTTER_COLOR_ENCODING_ELECTRICAL);
+  g_set_object (&paint_context->framebuffer_color_state, color_state);
 
   target_color_state = paint_context->framebuffer_color_state;
   clutter_paint_context_push_target_color_state (paint_context,
