@@ -20,10 +20,15 @@
 
 #include "meta-dbus-debug-control.h"
 
+#include "clutter/clutter.h"
+
 #define META_TYPE_DEBUG_CONTROL (meta_debug_control_get_type ())
 G_DECLARE_FINAL_TYPE (MetaDebugControl,
                       meta_debug_control,
                       META, DEBUG_CONTROL,
                       MetaDBusDebugControlSkeleton)
+
+gboolean meta_debug_control_get_forced_color_encoding (MetaDebugControl     *debug_control,
+                                                       ClutterColorEncoding *forced_color_encoding);
 
 void meta_debug_control_export (MetaDebugControl *debug_control);

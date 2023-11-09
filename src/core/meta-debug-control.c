@@ -100,6 +100,43 @@ on_enable_hdr_changed (MetaDebugControl *debug_control,
                 NULL);
 }
 
+static ClutterColorEncoding
+validate_color_encoding (ClutterColorEncoding color_encoding)
+{
+  switch (color_encoding)
+    {
+    case CLUTTER_COLOR_ENCODING_OPTICAL:
+    case CLUTTER_COLOR_ENCODING_ELECTRICAL:
+      return color_encoding;
+    }
+
+  if (color_encoding == -1)
+    return -1;
+
+  g_warning ("Invalid color encoding %d", color_encoding);
+  return -1;
+}
+
+static void
+on_force_color_encoding_changed (MetaDebugControl *debug_control,
+                                 GParamSpec       *pspec)
+{
+  MetaDBusDebugControl *dbus_debug_control =
+    META_DBUS_DEBUG_CONTROL (debug_control);
+  ClutterColorEncoding color_encoding;
+  ClutterColorEncoding validated_color_encoding;
+
+  color_encoding =
+    meta_dbus_debug_control_get_force_color_encoding (dbus_debug_control);
+  validated_color_encoding = validate_color_encoding (color_encoding);
+
+  if (color_encoding != validated_color_encoding)
+    {
+      meta_dbus_debug_control_set_force_color_encoding (dbus_debug_control,
+                                                        validated_color_encoding);
+    }
+}
+
 static void
 on_experimental_hdr_changed (MetaMonitorManager *monitor_manager,
                              GParamSpec         *pspec,
@@ -145,6 +182,10 @@ meta_debug_control_constructed (GObject *object)
 
   g_signal_connect_object (debug_control, "notify::enable-hdr",
                            G_CALLBACK (on_enable_hdr_changed), debug_control,
+                           G_CONNECT_DEFAULT);
+
+  g_signal_connect_object (debug_control, "notify::force-color-encoding",
+                           G_CALLBACK (on_force_color_encoding_changed), debug_control,
                            G_CONNECT_DEFAULT);
 
   G_OBJECT_CLASS (meta_debug_control_parent_class)->constructed (object);
@@ -219,6 +260,38 @@ meta_debug_control_class_init (MetaDebugControlClass *klass)
 static void
 meta_debug_control_init (MetaDebugControl *debug_control)
 {
+  MetaDBusDebugControl *dbus_debug_control =
+    META_DBUS_DEBUG_CONTROL (debug_control);
+
+  meta_dbus_debug_control_set_force_color_encoding (dbus_debug_control, -1);
+}
+
+gboolean
+meta_debug_control_get_forced_color_encoding (MetaDebugControl     *debug_control,
+                                              ClutterColorEncoding *forced_color_encoding)
+{
+  MetaDBusDebugControl *dbus_debug_control =
+    META_DBUS_DEBUG_CONTROL (debug_control);
+  const char *forced_color_encoding_env;
+  ClutterColorEncoding force_color_encoding;
+
+  forced_color_encoding_env = getenv ("MUTTER_DEBUG_FORCE_COLOR_ENCODING");
+  if (g_strcmp0 (forced_color_encoding_env, "optical") == 0)
+    return CLUTTER_COLOR_ENCODING_OPTICAL;
+  else if (g_strcmp0 (forced_color_encoding_env, "electrical") == 0)
+    return CLUTTER_COLOR_ENCODING_ELECTRICAL;
+
+  force_color_encoding =
+    meta_dbus_debug_control_get_force_color_encoding (dbus_debug_control);
+  if (force_color_encoding != -1)
+    {
+      *forced_color_encoding = force_color_encoding;
+      return TRUE;
+    }
+  else
+    {
+      return FALSE;
+    }
 }
 
 void
