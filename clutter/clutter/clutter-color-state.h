@@ -52,4 +52,8 @@ ClutterTransferFunction clutter_color_state_get_transfer_function (ClutterColorS
 CLUTTER_EXPORT
 ClutterColorEncoding clutter_color_state_get_color_encoding (ClutterColorState *color_state);
 
+CLUTTER_EXPORT
+CoglSnippet * clutter_color_state_get_transform_snippet (ClutterColorState *color_state,
+                                                         ClutterColorState *target_color_state);
+
 G_END_DECLS
