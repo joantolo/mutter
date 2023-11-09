@@ -197,11 +197,6 @@ typedef enum
   PIPELINE_BLEND = (1 << 1),
   PIPELINE_GRADIENT = (1 << 2),
   PIPELINE_ROUNDED_CLIP = (1 << 3),
-
-  PIPELINE_ALL = (PIPELINE_VIGNETTE |
-                  PIPELINE_BLEND |
-                  PIPELINE_GRADIENT |
-                  PIPELINE_ROUNDED_CLIP)
 } PipelineFlags;
 
 struct _MetaBackgroundContent
@@ -306,83 +301,111 @@ on_background_changed (MetaBackground        *background,
 }
 
 static CoglPipeline *
-make_pipeline (PipelineFlags pipeline_flags)
+make_pipeline (MetaBackgroundContent *self,
+               ClutterActor          *actor,
+               ClutterPaintContext   *paint_context,
+               PipelineFlags          pipeline_flags)
 {
-  static CoglPipeline *templates[PIPELINE_ALL + 1];
-  CoglPipeline **templatep;
+  ClutterContext *clutter_context;
+  ClutterPipelineCache *pipeline_cache;
+  ClutterPipelineGroup pipeline_group = G_OBJECT_GET_CLASS (self);
+  CoglPipeline *pipeline;
+  ClutterColorState *color_state = clutter_actor_get_color_state (actor);
+  ClutterColorState *target_color_state =
+    clutter_paint_context_get_target_color_state (paint_context);
 
-  g_assert (pipeline_flags < G_N_ELEMENTS (templates));
+  clutter_context = clutter_actor_get_context (actor);
+  g_assert (clutter_context);
 
-  templatep = &templates[pipeline_flags];
-  if (*templatep == NULL)
+  pipeline_cache = clutter_context_get_pipeline_cache (clutter_context);
+
+  pipeline = clutter_pipeline_cache_get_pipeline (pipeline_cache,
+                                                  pipeline_group,
+                                                  pipeline_flags,
+                                                  color_state,
+                                                  target_color_state);
+  if (!pipeline)
     {
+      ClutterColorState *color_state = clutter_actor_get_color_state (actor);
+      ClutterColorState *target_color_state =
+        clutter_paint_context_get_target_color_state (paint_context);
+      g_autoptr (CoglSnippet) color_snippet = NULL;
+
       /* Cogl automatically caches pipelines with no eviction policy,
        * so we need to prevent identical pipelines from getting cached
        * separately, by reusing the same shader snippets.
        */
-      *templatep = COGL_PIPELINE (meta_create_texture_pipeline (NULL));
+      pipeline = meta_create_texture_pipeline (NULL);
 
-      if ((pipeline_flags & PIPELINE_VIGNETTE) != 0)
+      if (pipeline_flags & PIPELINE_VIGNETTE)
         {
-          static CoglSnippet *vignette_vertex_snippet;
-          static CoglSnippet *vignette_fragment_snippet;
+          g_autoptr (CoglSnippet) vignette_vertex_snippet = NULL;
+          g_autoptr (CoglSnippet) vignette_fragment_snippet = NULL;
 
-          if (!vignette_vertex_snippet)
-            vignette_vertex_snippet = cogl_snippet_new (COGL_SNIPPET_HOOK_VERTEX,
-                                                        VIGNETTE_VERTEX_SHADER_DECLARATIONS,
-                                                        VIGNETTE_VERTEX_SHADER_CODE);
+          vignette_vertex_snippet =
+            cogl_snippet_new (COGL_SNIPPET_HOOK_VERTEX,
+                              VIGNETTE_VERTEX_SHADER_DECLARATIONS,
+                              VIGNETTE_VERTEX_SHADER_CODE);
+          cogl_pipeline_add_snippet (pipeline, vignette_vertex_snippet);
 
-          cogl_pipeline_add_snippet (*templatep, vignette_vertex_snippet);
+          vignette_fragment_snippet =
+            cogl_snippet_new (COGL_SNIPPET_HOOK_FRAGMENT,
+                              VIGNETTE_FRAGMENT_SHADER_DECLARATIONS,
+                              VIGNETTE_FRAGMENT_SHADER_CODE);
 
-          if (!vignette_fragment_snippet)
-            vignette_fragment_snippet = cogl_snippet_new (COGL_SNIPPET_HOOK_FRAGMENT,
-                                                          VIGNETTE_FRAGMENT_SHADER_DECLARATIONS,
-                                                          VIGNETTE_FRAGMENT_SHADER_CODE);
-
-          cogl_pipeline_add_snippet (*templatep, vignette_fragment_snippet);
+          cogl_pipeline_add_snippet (pipeline, vignette_fragment_snippet);
         }
 
-      if ((pipeline_flags & PIPELINE_GRADIENT) != 0)
+      if (pipeline_flags & PIPELINE_GRADIENT)
         {
-          static CoglSnippet *gradient_vertex_snippet;
-          static CoglSnippet *gradient_fragment_snippet;
+          g_autoptr (CoglSnippet) gradient_vertex_snippet = NULL;
+          g_autoptr (CoglSnippet) gradient_fragment_snippet = NULL;
 
-          if (!gradient_vertex_snippet)
-            gradient_vertex_snippet = cogl_snippet_new (COGL_SNIPPET_HOOK_VERTEX,
-                                                        GRADIENT_VERTEX_SHADER_DECLARATIONS,
-                                                        GRADIENT_VERTEX_SHADER_CODE);
+          gradient_vertex_snippet =
+            cogl_snippet_new (COGL_SNIPPET_HOOK_VERTEX,
+                              GRADIENT_VERTEX_SHADER_DECLARATIONS,
+                              GRADIENT_VERTEX_SHADER_CODE);
+          cogl_pipeline_add_snippet (pipeline, gradient_vertex_snippet);
 
-          cogl_pipeline_add_snippet (*templatep, gradient_vertex_snippet);
+          gradient_fragment_snippet =
+            cogl_snippet_new (COGL_SNIPPET_HOOK_FRAGMENT,
+                              GRADIENT_FRAGMENT_SHADER_DECLARATIONS,
+                              GRADIENT_FRAGMENT_SHADER_CODE);
 
-          if (!gradient_fragment_snippet)
-            gradient_fragment_snippet = cogl_snippet_new (COGL_SNIPPET_HOOK_FRAGMENT,
-                                                          GRADIENT_FRAGMENT_SHADER_DECLARATIONS,
-                                                          GRADIENT_FRAGMENT_SHADER_CODE);
-
-          cogl_pipeline_add_snippet (*templatep, gradient_fragment_snippet);
+          cogl_pipeline_add_snippet (pipeline, gradient_fragment_snippet);
         }
 
-      if ((pipeline_flags & PIPELINE_ROUNDED_CLIP) != 0)
+      if (pipeline_flags & PIPELINE_ROUNDED_CLIP)
         {
-          static CoglSnippet *rounded_clip_fragment_snippet;
+          g_autoptr (CoglSnippet) rounded_clip_fragment_snippet = NULL;
 
-          if (!rounded_clip_fragment_snippet)
-            {
-              rounded_clip_fragment_snippet =
-                cogl_snippet_new (COGL_SNIPPET_HOOK_FRAGMENT,
-                                  ROUNDED_CLIP_FRAGMENT_SHADER_DECLARATIONS,
-                                  ROUNDED_CLIP_FRAGMENT_SHADER_CODE);
-            }
+          rounded_clip_fragment_snippet =
+            cogl_snippet_new (COGL_SNIPPET_HOOK_FRAGMENT,
+                              ROUNDED_CLIP_FRAGMENT_SHADER_DECLARATIONS,
+                              ROUNDED_CLIP_FRAGMENT_SHADER_CODE);
 
-          cogl_pipeline_add_snippet (*templatep, rounded_clip_fragment_snippet);
+          cogl_pipeline_add_snippet (pipeline, rounded_clip_fragment_snippet);
         }
 
+      if (pipeline_flags & PIPELINE_BLEND)
+        cogl_pipeline_set_blend (pipeline, "RGBA = ADD (SRC_COLOR, 0)", NULL);
 
-      if ((pipeline_flags & PIPELINE_BLEND) == 0)
-        cogl_pipeline_set_blend (*templatep, "RGBA = ADD (SRC_COLOR, 0)", NULL);
+      color_snippet =
+        clutter_color_state_get_transform_snippet (color_state,
+                                                   target_color_state);
+      if (color_snippet)
+        cogl_pipeline_add_snippet (pipeline, color_snippet);
+
+      clutter_pipeline_cache_set_pipeline (pipeline_cache,
+                                           pipeline_group,
+                                           pipeline_flags,
+                                           color_state,
+                                           target_color_state,
+                                           pipeline);
+      g_object_unref (pipeline);
     }
 
-  return cogl_pipeline_copy (*templatep);
+  return cogl_pipeline_copy (pipeline);
 }
 
 static void
@@ -416,7 +439,7 @@ setup_pipeline (MetaBackgroundContent *self,
   if (self->pipeline == NULL)
     {
       self->pipeline_flags = pipeline_flags;
-      self->pipeline = make_pipeline (pipeline_flags);
+      self->pipeline = make_pipeline (self, actor, paint_context, pipeline_flags);
       self->changed = CHANGED_ALL;
     }
 
