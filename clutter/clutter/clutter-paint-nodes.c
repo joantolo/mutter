@@ -25,22 +25,27 @@
 
 #include "config.h"
 
-#include "clutter/clutter-paint-node-private.h"
+#include "clutter/clutter-paint-nodes.h"
 
 #include <pango/pango.h>
 
 #include "cogl/cogl.h"
 #include "clutter/clutter-actor-private.h"
 #include "clutter/clutter-blur-private.h"
+#include "clutter/clutter-color-state.h"
 #include "clutter/clutter-color.h"
 #include "clutter/clutter-debug.h"
 #include "clutter/clutter-private.h"
 #include "clutter/clutter-paint-context-private.h"
+#include "clutter/clutter-paint-node-private.h"
 
-#include "clutter/clutter-paint-nodes.h"
+static CoglContext *
+cogl_context_from_paint_context (ClutterPaintContext *paint_context)
+{
+  CoglFramebuffer *fb = clutter_paint_context_get_framebuffer (paint_context);
 
-static CoglPipeline *default_color_pipeline   = NULL;
-static CoglPipeline *default_texture_pipeline = NULL;
+  return cogl_framebuffer_get_context (fb);
+}
 
 /*< private >
  * clutter_paint_node_init_types:
@@ -50,27 +55,7 @@ static CoglPipeline *default_texture_pipeline = NULL;
 void
 clutter_paint_node_init_types (ClutterBackend *clutter_backend)
 {
-  CoglContext *cogl_context;
-  CoglColor cogl_color;
-  GType node_type G_GNUC_UNUSED;
-
-  if (G_LIKELY (default_color_pipeline != NULL))
-    return;
-
-  cogl_context = clutter_backend_get_cogl_context (clutter_backend);
-
-  node_type = clutter_paint_node_get_type ();
-
-  cogl_color_init_from_4f (&cogl_color, 1.0, 1.0, 1.0, 1.0);
-
-  default_color_pipeline = cogl_pipeline_new (cogl_context);
-  cogl_pipeline_set_color (default_color_pipeline, &cogl_color);
-
-  default_texture_pipeline = cogl_pipeline_new (cogl_context);
-  cogl_pipeline_set_layer_null_texture (default_texture_pipeline, 0);
-  cogl_pipeline_set_color (default_texture_pipeline, &cogl_color);
-  cogl_pipeline_set_layer_wrap_mode (default_texture_pipeline, 0,
-                                     COGL_PIPELINE_WRAP_MODE_AUTOMATIC);
+  g_type_ensure (clutter_paint_node_get_type ());
 }
 
 /*
@@ -346,6 +331,9 @@ struct _ClutterPipelineNode
 struct _ClutterPipelineNodeClass
 {
   ClutterPaintNodeClass parent_class;
+
+  void (* create_pipeline) (ClutterPipelineNode *pnode,
+                            ClutterPaintContext *paint_context);
 };
 
 G_DEFINE_TYPE (ClutterPipelineNode, clutter_pipeline_node, CLUTTER_TYPE_PAINT_NODE)
@@ -354,8 +342,11 @@ static void
 clutter_pipeline_node_finalize (ClutterPaintNode *node)
 {
   ClutterPipelineNode *pnode = CLUTTER_PIPELINE_NODE (node);
+  ClutterPipelineCache *pipeline_cache =
+    clutter_context_get_pipeline_cache (node->context);
 
   g_clear_object (&pnode->pipeline);
+  clutter_pipeline_cache_unset_all_pipelines (pipeline_cache, pnode);
 
   CLUTTER_PAINT_NODE_CLASS (clutter_pipeline_node_parent_class)->finalize (node);
 }
@@ -364,10 +355,7 @@ static gboolean
 clutter_pipeline_node_pre_draw (ClutterPaintNode    *node,
                                 ClutterPaintContext *paint_context)
 {
-  ClutterPipelineNode *pnode = CLUTTER_PIPELINE_NODE (node);
-
-  if (node->operations != NULL &&
-      pnode->pipeline != NULL)
+  if (node->operations != NULL)
     return TRUE;
 
   return FALSE;
@@ -394,11 +382,15 @@ clutter_pipeline_node_draw (ClutterPaintNode    *node,
   CoglFramebuffer *fb;
   guint i;
 
-  if (pnode->pipeline == NULL)
-    return;
-
   if (node->operations == NULL)
     return;
+
+  if (!pnode->pipeline)
+    {
+      CLUTTER_PIPELINE_NODE_GET_CLASS (node)->create_pipeline (pnode,
+                                                               paint_context);
+
+    }
 
   fb = clutter_paint_context_get_framebuffer (paint_context);
 
@@ -512,6 +504,8 @@ clutter_pipeline_node_new (ClutterContext *context,
 struct _ClutterColorNode
 {
   ClutterPipelineNode parent_instance;
+
+  CoglColor color;
 };
 
 /**
@@ -528,18 +522,37 @@ struct _ClutterColorNodeClass
 G_DEFINE_TYPE (ClutterColorNode, clutter_color_node, CLUTTER_TYPE_PIPELINE_NODE)
 
 static void
+clutter_color_node_create_pipeline (ClutterPipelineNode *pnode,
+                                    ClutterPaintContext *paint_context)
+{
+  CoglContext *cogl_context = cogl_context_from_paint_context (paint_context);
+  ClutterColorState *color_state =
+    clutter_paint_context_get_color_state (paint_context);
+  ClutterColorState *target_color_state =
+    clutter_paint_context_get_target_color_state (paint_context);
+  CoglColor color;
+  g_autoptr (CoglSnippet) color_snippet = NULL;
+
+  pnode->pipeline = cogl_pipeline_new (cogl_context);
+  cogl_pipeline_set_color (pnode->pipeline, &color);
+
+  color_snippet =
+    clutter_color_state_get_transform_snippet (color_state, target_color_state);
+  if (color_snippet)
+    cogl_pipeline_add_snippet (pnode->pipeline, color_snippet);
+}
+
+static void
 clutter_color_node_class_init (ClutterColorNodeClass *klass)
 {
+  ClutterPipelineNodeClass *pnode_class = CLUTTER_PIPELINE_NODE_CLASS (klass);
 
+  pnode_class->create_pipeline = clutter_color_node_create_pipeline;
 }
 
 static void
 clutter_color_node_init (ClutterColorNode *cnode)
 {
-  ClutterPipelineNode *pnode = CLUTTER_PIPELINE_NODE (cnode);
-
-  g_assert (default_color_pipeline != NULL);
-  pnode->pipeline = cogl_pipeline_copy (default_color_pipeline);
 }
 
 /**
@@ -556,7 +569,7 @@ ClutterPaintNode *
 clutter_color_node_new (ClutterContext     *context,
                         const ClutterColor *color)
 {
-  ClutterPipelineNode *cnode;
+  ClutterColorNode *cnode;
 
   cnode = _clutter_paint_node_create (CLUTTER_TYPE_COLOR_NODE, context);
 
@@ -564,14 +577,16 @@ clutter_color_node_new (ClutterContext     *context,
     {
       CoglColor cogl_color;
 
-      cogl_color_init_from_4f (&cogl_color,
+      cogl_color_init_from_4f (&cnode->color,
                                color->red / 255.0,
                                color->green / 255.0,
                                color->blue / 255.0,
                                color->alpha / 255.0);
       cogl_color_premultiply (&cogl_color);
-
-      cogl_pipeline_set_color (cnode->pipeline, &cogl_color);
+    }
+  else
+    {
+      cogl_color_init_from_4f (&cnode->color, 1.0, 1.0, 1.0, 1.0);
     }
 
   return (ClutterPaintNode *) cnode;
@@ -585,6 +600,11 @@ clutter_color_node_new (ClutterContext     *context,
 struct _ClutterTextureNode
 {
   ClutterPipelineNode parent_instance;
+
+  CoglTexture *texture;
+  CoglColor color;
+  CoglPipelineFilter min_filter;
+  CoglPipelineFilter mag_filter;
 };
 
 /**
@@ -601,17 +621,46 @@ struct _ClutterTextureNodeClass
 G_DEFINE_TYPE (ClutterTextureNode, clutter_texture_node, CLUTTER_TYPE_PIPELINE_NODE)
 
 static void
+clutter_texture_node_create_pipeline (ClutterPipelineNode *pnode,
+                                      ClutterPaintContext *paint_context)
+{
+  ClutterTextureNode *tnode = CLUTTER_TEXTURE_NODE (pnode);
+  ClutterColorState *color_state =
+    clutter_paint_context_get_color_state (paint_context);
+  ClutterColorState *target_color_state =
+    clutter_paint_context_get_target_color_state (paint_context);
+  CoglContext *cogl_context = cogl_context_from_paint_context (paint_context);
+  CoglColor color;
+  g_autoptr (CoglSnippet) color_snippet = NULL;
+
+  if (pnode->pipeline)
+    return;
+
+  pnode->pipeline = cogl_pipeline_new (cogl_context);
+  cogl_pipeline_set_layer_texture (pnode->pipeline, 0, tnode->texture);
+  cogl_pipeline_set_layer_wrap_mode (pnode->pipeline, 0,
+                                     COGL_PIPELINE_WRAP_MODE_AUTOMATIC);
+  cogl_pipeline_set_layer_filters (pnode->pipeline, 0,
+                                   tnode->min_filter, tnode->mag_filter);
+  cogl_pipeline_set_color (pnode->pipeline, &color);
+
+  color_snippet =
+    clutter_color_state_get_transform_snippet (color_state, target_color_state);
+  if (color_snippet)
+    cogl_pipeline_add_snippet (pnode->pipeline, color_snippet);
+}
+
+static void
 clutter_texture_node_class_init (ClutterTextureNodeClass *klass)
 {
+  ClutterPipelineNodeClass *pnode_class = CLUTTER_PIPELINE_NODE_CLASS (klass);
+
+  pnode_class->create_pipeline = clutter_texture_node_create_pipeline;
 }
 
 static void
 clutter_texture_node_init (ClutterTextureNode *self)
 {
-  ClutterPipelineNode *pnode = CLUTTER_PIPELINE_NODE (self);
-
-  g_assert (default_texture_pipeline != NULL);
-  pnode->pipeline = cogl_pipeline_copy (default_texture_pipeline);
 }
 
 static CoglPipelineFilter
@@ -658,33 +707,30 @@ clutter_texture_node_new (ClutterContext       *context,
                           ClutterScalingFilter  min_filter,
                           ClutterScalingFilter  mag_filter)
 {
-  ClutterPipelineNode *tnode;
-  CoglColor cogl_color;
-  CoglPipelineFilter min_f, mag_f;
+  ClutterTextureNode *tnode;
 
   g_return_val_if_fail (COGL_IS_TEXTURE (texture), NULL);
 
   tnode = _clutter_paint_node_create (CLUTTER_TYPE_TEXTURE_NODE, context);
+  tnode->texture = g_object_ref (texture);
+  tnode->min_filter =
+    clutter_scaling_filter_to_cogl_pipeline_filter (min_filter);
+  tnode->mag_filter =
+    clutter_scaling_filter_to_cogl_pipeline_filter (mag_filter);
 
-  cogl_pipeline_set_layer_texture (tnode->pipeline, 0, texture);
-
-  min_f = clutter_scaling_filter_to_cogl_pipeline_filter (min_filter);
-  mag_f = clutter_scaling_filter_to_cogl_pipeline_filter (mag_filter);
-  cogl_pipeline_set_layer_filters (tnode->pipeline, 0, min_f, mag_f);
-
-  if (color != NULL)
+  if (color)
     {
-      cogl_color_init_from_4f (&cogl_color,
+      cogl_color_init_from_4f (&tnode->color,
                                color->red / 255.0,
                                color->green / 255.0,
                                color->blue / 255.0,
                                color->alpha / 255.0);
-      cogl_color_premultiply (&cogl_color);
+      cogl_color_premultiply (&tnode->color);
     }
   else
-    cogl_color_init_from_4f (&cogl_color, 1.0, 1.0, 1.0, 1.0);
-
-  cogl_pipeline_set_color (tnode->pipeline, &cogl_color);
+    {
+      cogl_color_init_from_4f (&tnode->color, 1.0, 1.0, 1.0, 1.0);
+    }
 
   return (ClutterPaintNode *) tnode;
 }
@@ -740,6 +786,7 @@ clutter_text_node_draw (ClutterPaintNode    *node,
   ClutterTextNode *tnode = CLUTTER_TEXT_NODE (node);
   PangoRectangle extents;
   CoglFramebuffer *fb;
+  CoglColor color;
   guint i;
 
   if (node->operations == NULL)
@@ -778,11 +825,12 @@ clutter_text_node_draw (ClutterPaintNode    *node,
               clipped = TRUE;
             }
 
+          // TODO: this needs transforms etc too vv
           cogl_pango_show_layout (fb,
                                   tnode->layout,
                                   op->op.texrect[0],
                                   op->op.texrect[1],
-                                  &tnode->color);
+                                  &color);
 
           if (clipped)
             cogl_framebuffer_pop_clip (fb);
@@ -1153,8 +1201,9 @@ struct _ClutterLayerNode
   float fbo_width;
   float fbo_height;
 
+  CoglTexture *texture;
   CoglPipeline *pipeline;
-  CoglFramebuffer *offscreen;
+  CoglOffscreen *offscreen;
 
   guint8 opacity;
 };
@@ -1171,6 +1220,8 @@ clutter_layer_node_pre_draw (ClutterPaintNode *node,
                              ClutterPaintContext *paint_context)
 {
   ClutterLayerNode *lnode = (ClutterLayerNode *) node;
+  CoglFramebuffer *offscreen_fb;
+  ClutterColorState *color_state;
 
   /* if we were unable to create an offscreen buffer for this node, then
    * we simply ignore it
@@ -1178,14 +1229,19 @@ clutter_layer_node_pre_draw (ClutterPaintNode *node,
   if (lnode->offscreen == NULL)
     return FALSE;
 
-  clutter_paint_context_push_framebuffer (paint_context, lnode->offscreen);
+  color_state = clutter_paint_context_get_color_state (paint_context);
+  offscreen_fb = COGL_FRAMEBUFFER (lnode->offscreen);
+
+  clutter_paint_context_push_framebuffer (paint_context, offscreen_fb);
+  clutter_paint_context_push_target_color_state (paint_context,
+                                                 color_state);
 
   /* clear out the target framebuffer */
-  cogl_framebuffer_clear4f (lnode->offscreen,
+  cogl_framebuffer_clear4f (offscreen_fb,
                             COGL_BUFFER_BIT_COLOR | COGL_BUFFER_BIT_DEPTH,
                             0.f, 0.f, 0.f, 0.f);
 
-  cogl_framebuffer_push_matrix (lnode->offscreen);
+  cogl_framebuffer_push_matrix (offscreen_fb);
 
   /* every draw operation after this point will happen an offscreen
    * framebuffer
@@ -1195,19 +1251,60 @@ clutter_layer_node_pre_draw (ClutterPaintNode *node,
 }
 
 static void
+ensure_layer_node_pipeline (ClutterLayerNode    *lnode,
+                            ClutterPaintContext *paint_context)
+{
+  ClutterColorState *color_state =
+    clutter_paint_context_get_color_state (paint_context);
+  ClutterColorState *target_color_state =
+    clutter_paint_context_get_target_color_state (paint_context);
+  CoglContext *cogl_context = cogl_context_from_paint_context (paint_context);
+  CoglTexture *texture;
+  CoglColor color;
+  g_autoptr (CoglSnippet) color_snippet = NULL;
+
+  /* the pipeline used to paint the texture; we use nearest
+   * interpolation filters because the texture is always
+   * going to be painted at a 1:1 texel:pixel ratio
+   */
+  lnode->pipeline = cogl_pipeline_new (cogl_context);
+  cogl_pipeline_set_layer_filters (lnode->pipeline, 0,
+                                   COGL_PIPELINE_FILTER_NEAREST,
+                                   COGL_PIPELINE_FILTER_NEAREST);
+  cogl_pipeline_set_layer_wrap_mode (lnode->pipeline, 0,
+                                     COGL_PIPELINE_WRAP_MODE_AUTOMATIC);
+
+  texture = cogl_offscreen_get_texture (lnode->offscreen);
+  cogl_pipeline_set_layer_texture (lnode->pipeline, 0, texture);
+  cogl_pipeline_set_color (lnode->pipeline, &color);
+
+  color_snippet =
+    clutter_color_state_get_transform_snippet (color_state, target_color_state);
+  if (color_snippet)
+    cogl_pipeline_add_snippet (lnode->pipeline, color_snippet);
+}
+
+static void
 clutter_layer_node_post_draw (ClutterPaintNode    *node,
                               ClutterPaintContext *paint_context)
 {
   ClutterLayerNode *lnode = CLUTTER_LAYER_NODE (node);
+  ClutterColorState *color_state;
   CoglFramebuffer *fb;
   guint i;
 
   /* switch to the previous framebuffer */
-  cogl_framebuffer_pop_matrix (lnode->offscreen);
+  cogl_framebuffer_pop_matrix (COGL_FRAMEBUFFER (lnode->offscreen));
   clutter_paint_context_pop_framebuffer (paint_context);
+
+  color_state = clutter_paint_context_get_color_state (paint_context);
+  clutter_paint_context_pop_target_color_state (paint_context,
+                                                color_state);
 
   if (!node->operations)
     return;
+
+  ensure_layer_node_pipeline (lnode, paint_context);
 
   fb = clutter_paint_context_get_framebuffer (paint_context);
 
@@ -1313,14 +1410,14 @@ clutter_layer_node_new_to_framebuffer (ClutterContext  *context,
 {
   ClutterLayerNode *res;
 
-  g_return_val_if_fail (COGL_IS_FRAMEBUFFER (framebuffer), NULL);
+  g_return_val_if_fail (COGL_IS_OFFSCREEN (framebuffer), NULL);
   g_return_val_if_fail (COGL_IS_PIPELINE (pipeline), NULL);
 
   res = _clutter_paint_node_create (CLUTTER_TYPE_LAYER_NODE, context);
 
   res->fbo_width = cogl_framebuffer_get_width (framebuffer);
   res->fbo_height = cogl_framebuffer_get_height (framebuffer);
-  res->offscreen = g_object_ref (framebuffer);
+  res->offscreen = g_object_ref (COGL_OFFSCREEN (framebuffer));
   res->pipeline = cogl_pipeline_copy (pipeline);
 
   return (ClutterPaintNode *) res;
@@ -1599,9 +1696,12 @@ clutter_blur_node_new (ClutterContext *context,
       goto out;
     }
 
+  // TODO needs color stuff
   layer_node = CLUTTER_LAYER_NODE (blur_node);
-  layer_node->offscreen = COGL_FRAMEBUFFER (g_steal_pointer (&offscreen));
-  layer_node->pipeline = cogl_pipeline_copy (default_texture_pipeline);
+  layer_node->offscreen = g_steal_pointer (&offscreen);
+  layer_node->pipeline = cogl_pipeline_new (cogl_context);
+  cogl_pipeline_set_layer_wrap_mode (layer_node->pipeline, 0,
+                                     COGL_PIPELINE_WRAP_MODE_AUTOMATIC);
   cogl_pipeline_set_layer_filters (layer_node->pipeline, 0,
                                    COGL_PIPELINE_FILTER_LINEAR,
                                    COGL_PIPELINE_FILTER_LINEAR);
@@ -1609,7 +1709,7 @@ clutter_blur_node_new (ClutterContext *context,
                                    0,
                                    clutter_blur_get_texture (blur));
 
-  cogl_framebuffer_orthographic (layer_node->offscreen,
+  cogl_framebuffer_orthographic (COGL_FRAMEBUFFER (layer_node->offscreen),
                                  0.0, 0.0,
                                  width, height,
                                  0.0, 1.0);

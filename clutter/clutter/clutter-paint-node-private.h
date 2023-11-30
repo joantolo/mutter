@@ -36,6 +36,9 @@ G_BEGIN_DECLS
 #define CLUTTER_IS_PAINT_NODE_CLASS(klass)      (G_TYPE_CHECK_CLASS_TYPE ((klass), CLUTTER_TYPE_PAINT_NODE))
 #define CLUTTER_PAINT_NODE_GET_CLASS(obj)       (G_TYPE_INSTANCE_GET_CLASS ((obj), CLUTTER_TYPE_PAINT_NODE, ClutterPaintNodeClass))
 
+#define CLUTTER_PIPELINE_NODE_CLASS(klass)      (G_TYPE_CHECK_CLASS_CAST ((klass), CLUTTER_TYPE_PIPELINE_NODE, ClutterPipelineNodeClass))
+#define CLUTTER_PIPELINE_NODE_GET_CLASS(obj)    (G_TYPE_INSTANCE_GET_CLASS ((obj), CLUTTER_TYPE_PIPELINE_NODE, ClutterPipelineNodeClass))
+
 typedef struct _ClutterPaintOperation   ClutterPaintOperation;
 
 struct _ClutterPaintNode
