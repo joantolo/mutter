@@ -171,7 +171,7 @@ enum
 
 static guint stage_signals[LAST_SIGNAL] = { 0, };
 
-static const ClutterColor default_stage_color = { 255, 255, 255, 255 };
+static const CoglColor default_stage_color = { 255, 255, 255, 255 };
 
 static void free_pointer_device_entry (PointerDeviceEntry *entry);
 static void free_event_receiver (EventReceiver *receiver);
@@ -396,7 +396,7 @@ clutter_stage_do_paint_view (ClutterStage     *stage,
   graphene_frustum_t clip_frustum;
   ClutterPaintNode *root_node;
   CoglFramebuffer *fb;
-  ClutterColor bg_color;
+  CoglColor bg_color;
   int n_rectangles;
   ClutterPaintFlag paint_flags;
 
@@ -1297,7 +1297,7 @@ clutter_stage_paint (ClutterActor        *actor,
       g_autoptr (GString) string = NULL;
       PangoLayout *layout;
       PangoRectangle logical;
-      ClutterColor color;
+      CoglColor color;
       g_autoptr (ClutterPaintNode) node = NULL;
       ClutterActorBox box;
 
@@ -1310,7 +1310,7 @@ clutter_stage_paint (ClutterActor        *actor,
       pango_layout_set_alignment (layout, PANGO_ALIGN_RIGHT);
       pango_layout_get_pixel_extents (layout, NULL, &logical);
 
-      clutter_color_init (&color, 255, 255, 255, 255);
+      cogl_color_init_from_4f (&color, 1.0, 1.0, 1.0, 1.0);
       node = clutter_text_node_new (layout, &color);
 
       box.x1 = view_layout.x;

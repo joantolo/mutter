@@ -265,10 +265,10 @@ on_monitors_changed (MetaMonitorManager *monitor_manager,
       MtkRectangle rect;
       ClutterActor *background_actor;
       MetaBackground *background;
-      uint8_t red;
-      uint8_t green;
-      uint8_t blue;
-      ClutterColor color;
+      double red;
+      double green;
+      double blue;
+      CoglColor color;
 
       meta_display_get_monitor_geometry (display, i, &rect);
 
@@ -279,10 +279,10 @@ on_monitors_changed (MetaMonitorManager *monitor_manager,
       clutter_actor_set_position (background_actor, rect.x, rect.y);
       clutter_actor_set_size (background_actor, rect.width, rect.height);
 
-      blue = g_rand_int_range (rand, 0, 255);
-      green = g_rand_int_range (rand, 0, 255);
-      red = g_rand_int_range (rand, 0, 255);
-      clutter_color_init (&color, red, green, blue, 255);
+      blue = g_rand_double_range (rand, 0.0, 1.0);
+      green = g_rand_double_range (rand, 0.0, 1.0);
+      red = g_rand_double_range (rand, 0.0, 1.0);
+      cogl_color_init_from_4f (&color, red, green, blue, 1.0);
 
       background = meta_background_new (display);
       meta_background_set_color (background, &color);
@@ -700,7 +700,7 @@ get_display_tile_preview (MetaDisplay *display)
       preview = g_new0 (DisplayTilePreview, 1);
 
       preview->actor = clutter_actor_new ();
-      clutter_actor_set_background_color (preview->actor, &CLUTTER_COLOR_INIT (0, 0, 255, 255));
+      clutter_actor_set_background_color (preview->actor, &COGL_COLOR_INIT (0, 0, 255, 255));
       clutter_actor_set_opacity (preview->actor, 100);
 
       clutter_actor_add_child (meta_get_window_group_for_display (display),
