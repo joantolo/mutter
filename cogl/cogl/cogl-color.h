@@ -50,6 +50,23 @@
 
 G_BEGIN_DECLS
 
+/**
+ * COGL_COLOR_INIT:
+ * @r: value for the red channel, between 0 and 255
+ * @g: value for the green channel, between 0 and 255
+ * @b: value for the blue channel, between 0 and 255
+ * @a: value for the alpha channel, between 0 and 255
+ *
+ * A macro that initializes a #CoglColor, to be used when declaring it.
+ */
+#define COGL_COLOR_INIT(_r, _g, _b, _a) \
+        (CoglColor) { \
+          .red = (_r), \
+          .green = (_g), \
+          .blue = (_b), \
+          .alpha = (_a) \
+        }
+
 #define COGL_TYPE_COLOR (cogl_color_get_type ())
 
 /**
@@ -80,6 +97,13 @@ cogl_color_copy (const CoglColor *color);
  */
 COGL_EXPORT void
 cogl_color_free (CoglColor *color);
+
+COGL_EXPORT
+gchar * cogl_color_to_string (const CoglColor *color);
+
+COGL_EXPORT
+gboolean cogl_color_from_string (CoglColor   *color,
+                                 const gchar *str);
 
 /**
  * cogl_color_init_from_4f:
@@ -170,7 +194,18 @@ cogl_color_premultiply (CoglColor *color);
  * Return value: %TRUE if the two colors are the same.
  */
 COGL_EXPORT gboolean
-cogl_color_equal (const void *v1, const void *v2);
+cogl_color_equal (const void *v1,
+                  const void *v2);
+
+COGL_EXPORT
+guint32 cogl_color_to_pixel (const CoglColor *color);
+
+COGL_EXPORT
+void cogl_color_from_pixel (CoglColor *color,
+                            guint32    pixel);
+
+COGL_EXPORT
+guint cogl_color_hash (gconstpointer v);
 
 /**
  * cogl_color_to_hsl:

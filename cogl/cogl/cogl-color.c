@@ -32,6 +32,8 @@
 
 #include <string.h>
 
+#include <pango/pango.h>
+
 #include "cogl/cogl-util.h"
 #include "cogl/cogl-color.h"
 #include "cogl/cogl-color-private.h"
@@ -70,6 +72,409 @@ cogl_color_init_from_4f (CoglColor *color,
   color->green =  (green * 255);
   color->blue  =  (blue * 255);
   color->alpha =  (alpha * 255);
+}
+
+static inline void
+skip_whitespace (gchar **str)
+{
+  while (g_ascii_isspace (**str))
+    *str += 1;
+}
+
+static inline void
+parse_rgb_value (gchar   *str,
+                 guint8  *color,
+                 gchar  **endp)
+{
+  gdouble number;
+  gchar *p;
+
+  skip_whitespace (&str);
+
+  number = g_ascii_strtod (str, endp);
+
+  p = *endp;
+
+  skip_whitespace (&p);
+
+  if (*p == '%')
+    {
+      *endp = (gchar *) (p + 1);
+
+      *color = CLAMP (number / 100.0, 0.0, 1.0) * 255;
+    }
+  else
+    *color = CLAMP (number, 0, 255);
+}
+
+static gboolean
+parse_rgba (CoglColor *color,
+            gchar     *str,
+            gboolean   has_alpha)
+{
+  skip_whitespace (&str);
+
+  if (*str != '(')
+    return FALSE;
+
+  str += 1;
+
+  /* red */
+  parse_rgb_value (str, &color->red, &str);
+  skip_whitespace (&str);
+  if (*str != ',')
+    return FALSE;
+
+  str += 1;
+
+  /* green */
+  parse_rgb_value (str, &color->green, &str);
+  skip_whitespace (&str);
+  if (*str != ',')
+    return FALSE;
+
+  str += 1;
+
+  /* blue */
+  parse_rgb_value (str, &color->blue, &str);
+  skip_whitespace (&str);
+
+  /* alpha (optional); since the alpha channel value can only
+   * be between 0 and 1 we don't use the parse_rgb_value()
+   * function
+   */
+  if (has_alpha)
+    {
+      gdouble number;
+
+      if (*str != ',')
+        return FALSE;
+
+      str += 1;
+
+      skip_whitespace (&str);
+      number = g_ascii_strtod (str, &str);
+
+      color->alpha = CLAMP (number * 255.0, 0, 255);
+    }
+  else
+    color->alpha = 255;
+
+  skip_whitespace (&str);
+  if (*str != ')')
+    return FALSE;
+
+  return TRUE;
+}
+
+static gboolean
+parse_hsla (CoglColor *color,
+            gchar     *str,
+            gboolean   has_alpha)
+{
+  gdouble number;
+  gdouble h, l, s;
+
+  skip_whitespace (&str);
+
+  if (*str != '(')
+    return FALSE;
+
+  str += 1;
+
+  /* hue */
+  skip_whitespace (&str);
+  /* we don't do any angle normalization here because
+   * cogl_color_from_hls() will do it for us
+   */
+  number = g_ascii_strtod (str, &str);
+  skip_whitespace (&str);
+  if (*str != ',')
+    return FALSE;
+
+  h = number;
+
+  str += 1;
+
+  /* saturation */
+  skip_whitespace (&str);
+  number = g_ascii_strtod (str, &str);
+  skip_whitespace (&str);
+  if (*str != '%')
+    return FALSE;
+
+  str += 1;
+
+  s = CLAMP (number / 100.0, 0.0, 1.0);
+  skip_whitespace (&str);
+  if (*str != ',')
+    return FALSE;
+
+  str += 1;
+
+  /* luminance */
+  skip_whitespace (&str);
+  number = g_ascii_strtod (str, &str);
+  skip_whitespace (&str);
+  if (*str != '%')
+    return FALSE;
+
+  str += 1;
+
+  l = CLAMP (number / 100.0, 0.0, 1.0);
+  skip_whitespace (&str);
+
+  /* alpha (optional); since the alpha channel value can only
+   * be between 0 and 1 we don't use the parse_rgb_value()
+   * function
+   */
+  if (has_alpha)
+    {
+      if (*str != ',')
+        return FALSE;
+
+      str += 1;
+
+      skip_whitespace (&str);
+      number = g_ascii_strtod (str, &str);
+
+      color->alpha = CLAMP (number * 255.0, 0, 255);
+    }
+  else
+    color->alpha = 255;
+
+  skip_whitespace (&str);
+  if (*str != ')')
+    return FALSE;
+
+  cogl_color_init_from_hsl (color, h, s, l);
+
+  return TRUE;
+}
+
+/**
+ * cogl_color_from_string:
+ * @color: (out caller-allocates): return location for a #CoglColor
+ * @str: a string specifying a color
+ *
+ * Parses a string definition of a color, filling the #CoglColor.red,
+ * #CoglColor.green, #CoglColor.blue and #CoglColor.alpha fields
+ * of @color.
+ *
+ * The @color is not allocated.
+ *
+ * The format of @str can be either one of:
+ *
+ *   - a standard name (as taken from the X11 rgb.txt file)
+ *   - an hexadecimal value in the form: `#rgb`, `#rrggbb`, `#rgba`, or `#rrggbbaa`
+ *   - a RGB color in the form: `rgb(r, g, b)`
+ *   - a RGB color in the form: `rgba(r, g, b, a)`
+ *   - a HSL color in the form: `hsl(h, s, l)`
+ *    -a HSL color in the form: `hsla(h, s, l, a)`
+ *
+ * where 'r', 'g', 'b' and 'a' are (respectively) the red, green, blue color
+ * intensities and the opacity. The 'h', 's' and 'l' are (respectively) the
+ * hue, saturation and luminance values.
+ *
+ * In the rgb() and rgba() formats, the 'r', 'g', and 'b' values are either
+ * integers between 0 and 255, or percentage values in the range between 0%
+ * and 100%; the percentages require the '%' character. The 'a' value, if
+ * specified, can only be a floating point value between 0.0 and 1.0.
+ *
+ * In the hls() and hlsa() formats, the 'h' value (hue) is an angle between
+ * 0 and 360.0 degrees; the 'l' and 's' values (luminance and saturation) are
+ * percentage values in the range between 0% and 100%. The 'a' value, if specified,
+ * can only be a floating point value between 0.0 and 1.0.
+ *
+ * Whitespace inside the definitions is ignored; no leading whitespace
+ * is allowed.
+ *
+ * If the alpha component is not specified then it is assumed to be set to
+ * be fully opaque.
+ *
+ * Return value: %TRUE if parsing succeeded, and %FALSE otherwise
+ */
+gboolean
+cogl_color_from_string (CoglColor   *color,
+                        const gchar *str)
+{
+  PangoColor pango_color = { 0, };
+
+  g_return_val_if_fail (color != NULL, FALSE);
+  g_return_val_if_fail (str != NULL, FALSE);
+
+  if (strncmp (str, "rgb", 3) == 0)
+    {
+      gchar *s = (gchar *) str;
+      gboolean res;
+
+      if (strncmp (str, "rgba", 4) == 0)
+        res = parse_rgba (color, s + 4, TRUE);
+      else
+        res = parse_rgba (color, s + 3, FALSE);
+
+      return res;
+    }
+
+  if (strncmp (str, "hsl", 3) == 0)
+    {
+      gchar *s = (gchar *) str;
+      gboolean res;
+
+      if (strncmp (str, "hsla", 4) == 0)
+        res = parse_hsla (color, s + 4, TRUE);
+      else
+        res = parse_hsla (color, s + 3, FALSE);
+
+      return res;
+    }
+
+  /* if the string contains a color encoded using the hexadecimal
+   * notations (#rrggbbaa or #rgba) we attempt a rough pass at
+   * parsing the color ourselves, as we need the alpha channel that
+   * Pango can't retrieve.
+   */
+  if (str[0] == '#' && str[1] != '\0')
+    {
+      gsize length = strlen (str + 1);
+      gint32 result;
+
+      if (sscanf (str + 1, "%x", &result) == 1)
+        {
+          switch (length)
+            {
+            case 8: /* rrggbbaa */
+              color->red = (result >> 24) & 0xff;
+              color->green = (result >> 16) & 0xff;
+              color->blue = (result >> 8) & 0xff;
+
+              color->alpha = result & 0xff;
+
+              return TRUE;
+
+            case 6: /* #rrggbb */
+              color->red = (result >> 16) & 0xff;
+              color->green = (result >> 8) & 0xff;
+              color->blue = result & 0xff;
+
+              color->alpha = 0xff;
+
+              return TRUE;
+
+            case 4: /* #rgba */
+              color->red = ((result >> 12) & 0xf);
+              color->green = ((result >> 8) & 0xf);
+              color->blue = ((result >> 4) & 0xf);
+              color->alpha = result & 0xf;
+
+              color->red = (color->red << 4) | color->red;
+              color->green = (color->green << 4) | color->green;
+              color->blue = (color->blue << 4) | color->blue;
+              color->alpha = (color->alpha << 4) | color->alpha;
+
+              return TRUE;
+
+            case 3: /* #rgb */
+              color->red = ((result >> 8) & 0xf);
+              color->green = ((result >> 4) & 0xf);
+              color->blue = result & 0xf;
+
+              color->red = (color->red << 4) | color->red;
+              color->green = (color->green << 4) | color->green;
+              color->blue = (color->blue << 4) | color->blue;
+
+              color->alpha = 0xff;
+
+              return TRUE;
+
+            default:
+              return FALSE;
+            }
+        }
+    }
+
+  /* fall back to pango for X11-style named colors; see:
+   *
+   *   http://en.wikipedia.org/wiki/X11_color_names
+   *
+   * for a list. at some point we might even ship with our own list generated
+   * from X11/rgb.txt, like we generate the key symbols.
+   */
+  if (pango_color_parse (&pango_color, str))
+    {
+      color->red = pango_color.red;
+      color->green = pango_color.green;
+      color->blue = pango_color.blue;
+
+      color->alpha = 0xff;
+
+      return TRUE;
+    }
+
+  return FALSE;
+}
+
+/**
+ * cogl_color_to_string:
+ * @color: a #CoglColor
+ *
+ * Returns a textual specification of @color in the hexadecimal form
+ * `&num;rrggbbaa`, where `r`, `g`, `b` and `a` are
+ * hexadecimal digits representing the red, green, blue and alpha components
+ * respectively.
+ *
+ * Return value: (transfer full): a newly-allocated text string
+ */
+gchar *
+cogl_color_to_string (const CoglColor *color)
+{
+  g_return_val_if_fail (color != NULL, NULL);
+
+  return g_strdup_printf ("#%02x%02x%02x%02x",
+                          color->red,
+                          color->green,
+                          color->blue,
+                          color->alpha);
+}
+
+/**
+ * cogl_color_to_pixel:
+ * @color: a #CoglColor
+ *
+ * Converts @color into a packed 32 bit integer, containing
+ * all the four 8 bit channels used by #CoglColor.
+ *
+ * Return value: a packed color
+ */
+guint32
+cogl_color_to_pixel (const CoglColor *color)
+{
+  g_return_val_if_fail (color != NULL, 0);
+
+  return (color->alpha |
+          color->blue << 8 |
+          color->green << 16 |
+          color->red << 24);
+}
+
+/**
+ * cogl_color_from_pixel:
+ * @color: (out caller-allocates): return location for a #CoglColor
+ * @pixel: a 32 bit packed integer containing a color
+ *
+ * Converts @pixel from the packed representation of a four 8 bit channel
+ * color to a #CoglColor.
+ */
+void
+cogl_color_from_pixel (CoglColor *color,
+                       guint32    pixel)
+{
+  g_return_if_fail (color != NULL);
+
+  color->red = pixel >> 24;
+  color->green = (pixel >> 16) & 0xff;
+  color->blue = (pixel >> 8) & 0xff;
+  color->alpha = pixel & 0xff;
 }
 
 float
@@ -114,6 +519,23 @@ cogl_color_equal (const void *v1, const void *v2)
 
   /* XXX: We don't compare the padding */
   return *c1 == *c2 ? TRUE : FALSE;
+}
+
+/**
+ * cogl_color_hash:
+ * @v: (type Cogl.Color): a #CoglColor
+ *
+ * Converts a #CoglColor to a hash value.
+ *
+ * This function can be passed to g_hash_table_new() as the @hash_func
+ * parameter, when using `CoglColor`s as keys in a #GHashTable.
+ *
+ * Return value: a hash value corresponding to the color
+ */
+guint
+cogl_color_hash (gconstpointer v)
+{
+  return cogl_color_to_pixel ((const CoglColor *) v);
 }
 
 void
