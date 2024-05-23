@@ -452,6 +452,7 @@ build-wayland-only@x86_64:
         -Dbuildtype=debugoptimized
         -Dwayland=true
         -Dxwayland=false
+        -Dx11=false
         -Dcore_tests=false
         -Dnative_tests=false
         -Dintrospection=false
