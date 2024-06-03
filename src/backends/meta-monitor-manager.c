@@ -59,6 +59,7 @@
 #include "core/util-private.h"
 #include "meta/main.h"
 #include "meta/meta-enum-types.h"
+#include "meta/prefs.h"
 
 #include "meta-dbus-display-config.h"
 
@@ -491,23 +492,28 @@ prepare_shutdown (MetaBackend        *backend,
 }
 
 static void
-set_color_space_and_hdr_metadata (MetaMonitorManager    *manager,
-                                  gboolean               enable,
+get_color_space_and_hdr_metadata (MetaMonitorManager    *manager,
                                   MetaOutputColorspace  *color_space,
                                   MetaOutputHdrMetadata *hdr_metadata)
 {
+  MetaMonitorManagerPrivate *priv =
+    meta_monitor_manager_get_instance_private (manager);
   MetaBackend *backend = meta_monitor_manager_get_backend (manager);
   ClutterBackend *clutter_backend = meta_backend_get_clutter_backend (backend);
   CoglContext *cogl_context = clutter_backend_get_cogl_context (clutter_backend);
+  gboolean enabled;
 
-  if (enable &&
+  enabled = g_strcmp0 (priv->experimental_hdr, "on") == 0 ||
+            meta_prefs_get_high_dynamic_range ();
+
+  if (enabled &&
       !cogl_has_feature (cogl_context, COGL_FEATURE_ID_TEXTURE_HALF_FLOAT))
     {
       g_warning ("Tried to enable HDR without half float rendering support, ignoring");
-      enable = FALSE;
+      enabled = FALSE;
     }
 
-  if (enable)
+  if (enabled)
     {
       *color_space = META_OUTPUT_COLORSPACE_BT2020;
       *hdr_metadata = (MetaOutputHdrMetadata) {
@@ -535,16 +541,11 @@ set_color_space_and_hdr_metadata (MetaMonitorManager    *manager,
 static void
 ensure_hdr_settings (MetaMonitorManager *manager)
 {
-  MetaMonitorManagerPrivate *priv =
-    meta_monitor_manager_get_instance_private (manager);
   MetaOutputColorspace color_space;
   MetaOutputHdrMetadata hdr_metadata;
   GList *l;
 
-  set_color_space_and_hdr_metadata (manager,
-                                    g_strcmp0 (priv->experimental_hdr, "on") == 0,
-                                    &color_space,
-                                    &hdr_metadata);
+  get_color_space_and_hdr_metadata (manager, &color_space, &hdr_metadata);
 
   for (l = manager->monitors; l; l = l->next)
     {
@@ -1371,6 +1372,18 @@ on_started (MetaContext        *context,
 }
 
 static void
+prefs_changed_callback (MetaPreference pref,
+                        void          *data)
+{
+  MetaMonitorManager *manager = data;
+
+  if (pref != META_PREF_HIGH_DYNAMIC_RANGE)
+    return;
+
+  meta_monitor_manager_reconfigure (manager);
+}
+
+static void
 meta_monitor_manager_constructed (GObject *object)
 {
   MetaMonitorManager *manager = META_MONITOR_MANAGER (object);
@@ -1421,6 +1434,8 @@ meta_monitor_manager_constructed (GObject *object)
                     G_CALLBACK (prepare_shutdown),
                     manager);
 
+  meta_prefs_add_listener (prefs_changed_callback, manager);
+
   manager->current_switch_config = META_MONITOR_SWITCH_CONFIG_UNKNOWN;
 
   initialize_dbus_interface (manager);
@@ -1457,6 +1472,8 @@ meta_monitor_manager_dispose (GObject *object)
   g_clear_handle_id (&manager->restore_config_id, g_source_remove);
   g_clear_handle_id (&priv->switch_config_handle_id, g_source_remove);
   g_clear_handle_id (&priv->reload_monitor_manager_id, g_source_remove);
+
+  meta_prefs_remove_listener (prefs_changed_callback, manager);
 
   G_OBJECT_CLASS (meta_monitor_manager_parent_class)->dispose (object);
 }

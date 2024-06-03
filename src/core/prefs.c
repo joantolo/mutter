@@ -98,6 +98,7 @@ static gboolean bell_is_audible = TRUE;
 static gboolean gnome_accessibility = FALSE;
 static gboolean gnome_animations = TRUE;
 static gboolean locate_pointer_is_enabled = FALSE;
+static gboolean high_dynamic_range = FALSE;
 static unsigned int check_alive_timeout = 5000;
 static char *cursor_theme = NULL;
 /* cursor_size will, when running as an X11 compositing window manager, be the
@@ -388,6 +389,13 @@ static MetaBoolPreference preferences_bool[] =
         META_PREF_LOCATE_POINTER,
       },
       &locate_pointer_is_enabled,
+    },
+    {
+      { "high-dynamic-range",
+        SCHEMA_MUTTER,
+        META_PREF_HIGH_DYNAMIC_RANGE,
+      },
+      &high_dynamic_range,
     },
     { { NULL, 0, 0 }, NULL },
   };
@@ -1688,6 +1696,9 @@ meta_preference_to_string (MetaPreference pref)
 
     case META_PREF_CHECK_ALIVE_TIMEOUT:
       return "CHECK_ALIVE_TIMEOUT";
+
+    case META_PREF_HIGH_DYNAMIC_RANGE:
+      return "HIGH_DYNAMIC_RANGE";
     }
 
   return "(unknown)";
@@ -2038,6 +2049,12 @@ unsigned int
 meta_prefs_get_check_alive_timeout (void)
 {
   return check_alive_timeout;
+}
+
+gboolean
+meta_prefs_get_high_dynamic_range (void)
+{
+  return high_dynamic_range;
 }
 
 const char *

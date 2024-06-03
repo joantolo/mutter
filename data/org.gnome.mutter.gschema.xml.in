@@ -157,6 +157,15 @@
       </description>
     </key>
 
+    <key name="high-dynamic-range" type="b">
+      <default>false</default>
+      <summary>Enable HDR</summary>
+      <description>
+        When true, the content will be sent in HDR mode if the monitor
+        supports it.
+      </description>
+    </key>
+
     <child name="keybindings" schema="org.gnome.mutter.keybindings"/>
 
   </schema>
