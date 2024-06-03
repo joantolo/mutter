@@ -528,6 +528,30 @@ meta_output_info_get_min_refresh_rate (const MetaOutputInfo *output_info,
   return TRUE;
 }
 
+gboolean
+meta_output_info_get_hdr_supported (const MetaOutputInfo *output_info,
+                                    gboolean             *hdr_supported)
+{
+  MetaEdidColorimetry edid_colorimetry;
+  MetaEdidTransferFunction edid_tf;
+  uint64_t supported_color_spaces;
+
+  if (!output_info->supported_color_spaces || !output_info->edid_info)
+    return FALSE;
+
+  supported_color_spaces = output_info->supported_color_spaces;
+  edid_colorimetry = output_info->edid_info->colorimetry;
+  edid_tf = output_info->edid_info->hdr_static_metadata.tf;
+
+  *hdr_supported = !!(supported_color_spaces & (1 << META_OUTPUT_COLORSPACE_BT2020)) &&
+    !!(edid_colorimetry & META_EDID_COLORIMETRY_BT2020RGB) &&
+    (!!(edid_tf & META_EDID_TF_TRADITIONAL_GAMMA_HDR) ||
+    !!(edid_tf & META_EDID_TF_PQ) ||
+    !!(edid_tf & META_EDID_TF_HLG));
+
+  return TRUE;
+}
+
 void
 meta_output_set_color_space (MetaOutput           *output,
                              MetaOutputColorspace  color_space)

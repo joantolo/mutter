@@ -362,6 +362,8 @@
 	    - "min-refresh-rate" (i): minimum refresh rate of monitor when
 	                              Variable Refresh Rate is active (absence
 	                              of this means unknown)
+      - "high-dynamic-range-supported" (b): wether the monitor supports hdr
+              content (absence of this means it is not supported)
 
         Possible mode flags:
 	  1 : preferred mode

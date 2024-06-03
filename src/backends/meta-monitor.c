@@ -2287,6 +2287,16 @@ meta_monitor_get_min_refresh_rate (MetaMonitor *monitor,
 }
 
 gboolean
+meta_monitor_get_hdr_supported (MetaMonitor *monitor,
+                                gboolean    *hdr_supported)
+{
+  const MetaOutputInfo *output_info =
+    meta_monitor_get_main_output_info (monitor);
+
+  return meta_output_info_get_hdr_supported (output_info, hdr_supported);
+}
+
+gboolean
 meta_monitor_set_color_space (MetaMonitor           *monitor,
                               MetaOutputColorspace   color_space,
                               GError               **error)

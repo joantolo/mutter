@@ -2124,6 +2124,7 @@ meta_monitor_manager_handle_get_current_state (MetaDBusDisplayConfig *skeleton,
       GVariantBuilder monitor_properties_builder;
       GList *k;
       gboolean is_builtin;
+      gboolean hdr_supported;
       const char *display_name;
 
       current_mode = meta_monitor_get_current_mode (monitor);
@@ -2243,6 +2244,13 @@ meta_monitor_manager_handle_get_current_state (MetaDBusDisplayConfig *skeleton,
           g_variant_builder_add (&monitor_properties_builder, "{sv}",
                                  "min-refresh-rate",
                                  g_variant_new_int32 (min_refresh_rate));
+        }
+
+      if (meta_monitor_get_hdr_supported (monitor, &hdr_supported))
+        {
+          g_variant_builder_add (&monitor_properties_builder, "{sv}",
+                                 "high-dynamic-range-supported",
+                                 g_variant_new_boolean (hdr_supported));
         }
 
       g_variant_builder_add (&monitors_builder, MONITOR_FORMAT,
