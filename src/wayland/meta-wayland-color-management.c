@@ -22,17 +22,23 @@
 
 #include "config.h"
 
+#include <fcntl.h>
+#include <glib/gstdio.h>
+
 #include "meta-wayland-color-management.h"
 
 #include "backends/meta-color-device.h"
 #include "backends/meta-color-manager.h"
 #include "compositor/meta-surface-actor-wayland.h"
 #include "wayland/meta-wayland-client-private.h"
+#include "wayland/meta-wayland-icc-profile.h"
 #include "wayland/meta-wayland-private.h"
 #include "wayland/meta-wayland-versions.h"
 #include "wayland/meta-wayland-outputs.h"
 
 #include "color-management-v1-server-protocol.h"
+
+static GQuark quark_color_state_icc_anonymous_file = 0;
 
 struct _MetaWaylandColorManager
 {
@@ -125,6 +131,19 @@ typedef struct _MetaWaylandCreatorParams
   gboolean is_eotf_set;
   gboolean is_luminance_set;
 } MetaWaylandCreatorParams;
+
+typedef struct _MetaWaylandCreatorIcc
+{
+  MetaWaylandColorManager *color_manager;
+  struct wl_resource *resource;
+  struct wl_resource *image_desc_resource;
+
+  int fd;
+  uint32_t offset;
+  uint32_t length;
+} MetaWaylandCreatorIcc;
+
+#define READONLY_SEALS (F_SEAL_SHRINK | F_SEAL_GROW | F_SEAL_WRITE)
 
 static void meta_wayland_color_management_surface_free (MetaWaylandColorManagementSurface *cm_surface);
 
@@ -376,9 +395,81 @@ image_description_destroy (struct wl_client   *client,
   wl_resource_destroy (resource);
 }
 
+static MetaAnonymousFile *
+ensure_anonymous_file (ClutterColorState  *color_state,
+                       GError            **error)
+{
+  ClutterColorStateIcc *color_state_icc = CLUTTER_COLOR_STATE_ICC (color_state);
+  MetaAnonymousFile *icc_file;
+  uint32_t icc_length;
+  int icc_fd;
+
+  icc_file = g_object_get_qdata (G_OBJECT (color_state),
+                                 quark_color_state_icc_anonymous_file);
+  if (icc_file)
+    return icc_file;
+
+  icc_fd = clutter_color_state_icc_get_fd (color_state_icc);
+  if (icc_fd == -1)
+    {
+      g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED,
+                   "ICC color state doesn't have a fd");
+      return NULL;
+    }
+
+  icc_length = clutter_color_state_icc_get_length (color_state_icc);
+  if (icc_length == 0)
+    {
+      g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED,
+                   "ICC color state has invalid length");
+      return NULL;
+    }
+
+  icc_file = meta_wayland_icc_profile_get_anonymous_file_sync (icc_fd,
+                                                               0,
+                                                               icc_length,
+                                                               error);
+  if (!icc_file)
+    return NULL;
+
+  g_object_set_qdata_full (G_OBJECT (color_state),
+                           quark_color_state_icc_anonymous_file,
+                           icc_file,
+                           (GDestroyNotify) meta_anonymous_file_free);
+
+  return icc_file;
+}
+
 static void
-send_information (struct wl_resource *info_resource,
-                  ClutterColorState  *color_state)
+send_information_from_icc_profile (struct wl_resource *info_resource,
+                                   ClutterColorState  *color_state)
+{
+  g_autoptr (GError) error = NULL;
+  MetaAnonymousFile *icc_file;
+  uint32_t icc_length;
+  int icc_fd;
+
+  icc_file = ensure_anonymous_file (color_state, &error);
+  if (!icc_file)
+    {
+      g_warning ("Failed sending ICC profile info: %s", error->message);
+      return;
+    }
+
+  icc_fd = meta_anonymous_file_open_fd (icc_file,
+                                        META_ANONYMOUS_FILE_MAPMODE_PRIVATE);
+  icc_length = meta_anonymous_file_size (icc_file);
+
+  wp_image_description_info_v1_send_icc_file (info_resource,
+                                              icc_fd,
+                                              icc_length);
+
+  meta_anonymous_file_close_fd (icc_fd);
+}
+
+static void
+send_information_from_params (struct wl_resource *info_resource,
+                              ClutterColorState  *color_state)
 {
   enum wp_color_manager_v1_primaries primaries_named;
   enum wp_color_manager_v1_transfer_function tf;
@@ -449,6 +540,18 @@ send_information (struct wl_resource *info_resource,
                                                 float_to_scaled_uint32 (lum->min),
                                                 (uint32_t) lum->max,
                                                 (uint32_t) lum->ref);
+}
+
+static void
+send_information (struct wl_resource *info_resource,
+                  ClutterColorState  *color_state)
+{
+  if (CLUTTER_IS_COLOR_STATE_ICC (color_state))
+    send_information_from_icc_profile (info_resource, color_state);
+  else if (CLUTTER_IS_COLOR_STATE_PARAMS (color_state))
+    send_information_from_params (info_resource, color_state);
+  else
+    g_assert_not_reached ();
 }
 
 static void
@@ -883,6 +986,185 @@ static const struct wp_color_management_output_v1_interface
 {
   color_management_output_destroy,
   color_management_output_get_image_description,
+};
+
+static MetaWaylandCreatorIcc *
+meta_wayland_creator_icc_new (MetaWaylandColorManager *color_manager,
+                              struct wl_resource      *resource)
+{
+  MetaWaylandCreatorIcc *creator_icc;
+
+  creator_icc = g_new0 (MetaWaylandCreatorIcc, 1);
+  creator_icc->color_manager = color_manager;
+  creator_icc->resource = resource;
+  creator_icc->fd = -1;
+
+  return creator_icc;
+}
+
+static void
+meta_wayland_creator_icc_free (MetaWaylandCreatorIcc *creator_icc)
+{
+  g_clear_fd (&creator_icc->fd, NULL);
+  g_free (creator_icc);
+}
+
+static void
+on_icc_create_got_anon_file (GObject      *source_object,
+                             GAsyncResult *result,
+                             gpointer      user_data)
+{
+  MetaWaylandCreatorIcc *creator_icc = user_data;
+  MetaWaylandColorManager *color_manager = creator_icc->color_manager;
+  ClutterContext *clutter_context = get_clutter_context (color_manager);
+  struct wl_resource *image_desc_resource = creator_icc->image_desc_resource;
+  g_autoptr (ClutterColorState) color_state = NULL;
+  g_autoptr (GError) error = NULL;
+  MetaWaylandImageDescription *image_desc;
+  MetaAnonymousFile *file;
+  uint32_t icc_length;
+  int icc_fd;
+
+  if (meta_wayland_icc_profile_get_anonymous_file_finish (result,
+                                                          &file,
+                                                          &error))
+    {
+      icc_fd = meta_anonymous_file_open_fd (file,
+                                            META_ANONYMOUS_FILE_MAPMODE_PRIVATE);
+      icc_length = meta_anonymous_file_size (file);
+      color_state = clutter_color_state_icc_new (clutter_context,
+                                                 icc_fd,
+                                                 icc_length,
+                                                 &error);
+      meta_anonymous_file_close_fd (icc_fd);
+    }
+
+  if (color_state)
+    {
+      g_object_set_qdata_full (G_OBJECT (color_state),
+                               quark_color_state_icc_anonymous_file,
+                               file,
+                               (GDestroyNotify) meta_anonymous_file_free);
+
+      image_desc =
+        meta_wayland_image_description_new_color_state (color_manager,
+                                                        image_desc_resource,
+                                                        color_state,
+                                                        META_WAYLAND_IMAGE_DESCRIPTION_FLAGS_DEFAULT);
+    }
+  else
+    {
+      image_desc =
+        meta_wayland_image_description_new_failed (color_manager,
+                                                   image_desc_resource,
+                                                   WP_IMAGE_DESCRIPTION_V1_CAUSE_OPERATING_SYSTEM,
+                                                   error->message);
+    }
+
+  wl_resource_set_implementation (image_desc_resource,
+                                  &meta_wayland_image_description_interface,
+                                  image_desc,
+                                  image_description_destructor);
+
+  meta_wayland_creator_icc_free (creator_icc);
+}
+
+static void
+creator_icc_create (struct wl_client   *client,
+                    struct wl_resource *resource,
+                    uint32_t            id)
+{
+  MetaWaylandCreatorIcc *creator_icc = wl_resource_get_user_data (resource);
+  struct wl_resource *image_desc_resource;
+
+  if (creator_icc->fd == -1)
+    {
+      wl_resource_post_error (resource,
+                              WP_IMAGE_DESCRIPTION_CREATOR_ICC_V1_ERROR_INCOMPLETE_SET,
+                              "The ICC file has not been set");
+      return;
+    }
+
+  image_desc_resource =
+    wl_resource_create (client,
+                        &wp_image_description_v1_interface,
+                        wl_resource_get_version (resource),
+                        id);
+
+  creator_icc->image_desc_resource = image_desc_resource;
+
+  meta_wayland_icc_profile_get_anonymous_file_async (creator_icc->fd,
+                                                     creator_icc->offset,
+                                                     creator_icc->length,
+                                                     on_icc_create_got_anon_file,
+                                                     creator_icc);
+
+  wl_resource_destroy (resource);
+}
+
+static void
+creator_icc_set_icc_file (struct wl_client   *client,
+                          struct wl_resource *resource,
+                          int32_t             icc_profile_fd,
+                          uint32_t            offset,
+                          uint32_t            length)
+{
+  MetaWaylandCreatorIcc *creator_icc = wl_resource_get_user_data (resource);
+  struct stat stat;
+  int flags;
+
+  if (creator_icc->fd > 0)
+    {
+      wl_resource_post_error (resource,
+                              WP_IMAGE_DESCRIPTION_CREATOR_ICC_V1_ERROR_ALREADY_SET,
+                              "The ICC file was already set");
+      return;
+    }
+
+  flags = fcntl (icc_profile_fd, F_GETFL);
+  if ((flags & O_ACCMODE) == O_WRONLY ||
+      lseek (icc_profile_fd, 0, SEEK_CUR) < 0)
+    {
+      wl_resource_post_error (resource,
+                              WP_IMAGE_DESCRIPTION_CREATOR_ICC_V1_ERROR_BAD_FD,
+                              "The ICC file is not readable and seekable");
+      return;
+    }
+
+  if (length == 0 || length > (32 * 1024 * 1024))
+    {
+      wl_resource_post_error (resource,
+                              WP_IMAGE_DESCRIPTION_CREATOR_ICC_V1_ERROR_BAD_SIZE,
+                              "The size is 0 or bigger than 4 MB");
+      return;
+    }
+
+  if (fstat (icc_profile_fd, &stat) == -1)
+    {
+      wl_resource_post_error (resource,
+                              WP_IMAGE_DESCRIPTION_CREATOR_ICC_V1_ERROR_BAD_FD,
+                              "Couldn't fstat the ICC profile fd");
+      return;
+    }
+
+  if (stat.st_size < offset + length)
+    {
+      wl_resource_post_error (resource,
+                              WP_IMAGE_DESCRIPTION_CREATOR_ICC_V1_ERROR_OUT_OF_FILE,
+                              "ICC file shorter than expected");
+      return;
+    }
+
+  creator_icc->fd = icc_profile_fd;
+  creator_icc->offset = offset;
+  creator_icc->length = length;
+}
+
+static const struct wp_image_description_creator_icc_v1_interface
+  meta_wayland_image_description_creator_icc_interface =
+{
+  creator_icc_create,
+  creator_icc_set_icc_file,
 };
 
 static MetaWaylandCreatorParams *
@@ -1404,13 +1686,31 @@ color_manager_get_surface_feedback (struct wl_client   *client,
 }
 
 static void
+creator_icc_destructor (struct wl_resource *resource)
+{
+}
+
+static void
 color_manager_create_icc_creator (struct wl_client   *client,
                                   struct wl_resource *resource,
                                   uint32_t            id)
 {
-  wl_resource_post_error (resource,
-                          WP_COLOR_MANAGER_V1_ERROR_UNSUPPORTED_FEATURE,
-                          "ICC-based image description creator is unsupported");
+  MetaWaylandColorManager *color_manager = wl_resource_get_user_data (resource);
+  MetaWaylandCreatorIcc *creator_icc;
+  struct wl_resource *creator_resource;
+
+  creator_resource =
+    wl_resource_create (client,
+                        &wp_image_description_creator_icc_v1_interface,
+                        wl_resource_get_version (resource),
+                        id);
+
+  creator_icc = meta_wayland_creator_icc_new (color_manager, creator_resource);
+
+  wl_resource_set_implementation (creator_resource,
+                                  &meta_wayland_image_description_creator_icc_interface,
+                                  creator_icc,
+                                  creator_icc_destructor);
 }
 
 static void
@@ -1452,6 +1752,8 @@ color_manager_send_supported_events (struct wl_resource *resource)
 {
   wp_color_manager_v1_send_supported_intent (resource,
                                              WP_COLOR_MANAGER_V1_RENDER_INTENT_PERCEPTUAL);
+  wp_color_manager_v1_send_supported_feature (resource,
+                                              WP_COLOR_MANAGER_V1_FEATURE_ICC_V2_V4);
   wp_color_manager_v1_send_supported_feature (resource,
                                               WP_COLOR_MANAGER_V1_FEATURE_PARAMETRIC);
   wp_color_manager_v1_send_supported_feature (resource,
@@ -1588,6 +1890,9 @@ static void
 meta_wayland_color_manager_class_init (MetaWaylandColorManagerClass *klass)
 {
   GObjectClass *object_class = G_OBJECT_CLASS (klass);
+
+  quark_color_state_icc_anonymous_file =
+    g_quark_from_static_string ("-color-state-icc-anonymous-file");
 
   object_class->dispose = meta_wayland_color_manager_dispose;
 }
