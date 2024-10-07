@@ -22,12 +22,17 @@
 
 #include "config.h"
 
+#include <fcntl.h>
+#include <glib/gstdio.h>
+#include <sys/stat.h>
+
 #include "meta-wayland-color-management.h"
 
 #include "backends/meta-color-device.h"
 #include "backends/meta-color-manager.h"
 #include "compositor/meta-surface-actor-wayland.h"
 #include "core/meta-debug-control-private.h"
+#include "wayland/meta-wayland-icc-profile.h"
 #include "wayland/meta-wayland-private.h"
 #include "wayland/meta-wayland-versions.h"
 #include "wayland/meta-wayland-outputs.h"
@@ -126,6 +131,19 @@ typedef struct _MetaWaylandCreatorParams
   gboolean is_eotf_set;
   gboolean is_luminance_set;
 } MetaWaylandCreatorParams;
+
+typedef struct _MetaWaylandCreatorIcc
+{
+  MetaWaylandColorManager *color_manager;
+  struct wl_resource *resource;
+  struct wl_resource *image_desc_resource;
+
+  int fd;
+  uint32_t offset;
+  uint32_t length;
+} MetaWaylandCreatorIcc;
+
+#define READONLY_SEALS (F_SEAL_SHRINK | F_SEAL_GROW | F_SEAL_WRITE)
 
 static void meta_wayland_color_management_surface_free (MetaWaylandColorManagementSurface *cm_surface);
 
@@ -362,8 +380,71 @@ image_description_destroy (struct wl_client   *client,
 }
 
 static void
-send_information (struct wl_resource *info_resource,
-                  ClutterColorState  *color_state)
+send_info_on_icc_profile_mem_prepared (GObject      *source_object,
+                                       GAsyncResult *result,
+                                       gpointer      user_data)
+{
+  struct wl_resource *info_resource = user_data;
+  g_autoptr (GError) error = NULL;
+  g_autofd int icc_fd = -1;
+  uint32_t icc_length = 0;
+
+  if (!meta_wayland_icc_profile_prepare_mem_finish (result,
+                                                    &icc_fd,
+                                                    &icc_length,
+                                                    &error))
+    {
+      g_warning ("Failed getting anonymous ICC profile fd: %s", error->message);
+      return;
+    }
+
+  xx_image_description_info_v4_send_icc_file (info_resource,
+                                              icc_fd,
+                                              icc_length);
+}
+
+static void
+send_information_from_icc_profile (struct wl_resource *info_resource,
+                                   ClutterColorState  *color_state)
+{
+  ClutterColorStateIcc *color_state_icc = CLUTTER_COLOR_STATE_ICC (color_state);
+  uint32_t icc_length;
+  int icc_fd;
+  int seals;
+
+  icc_fd = clutter_color_state_icc_get_fd (color_state_icc);
+  if (icc_fd == -1)
+    {
+      g_warning ("ICC color state doesn't have a fd");
+      return;
+    }
+
+  icc_length = clutter_color_state_icc_get_length (color_state_icc);
+  if (icc_length == 0)
+    {
+      g_warning ("ICC color state has invalid length");
+      return;
+    }
+
+  seals = fcntl (icc_fd, F_GET_SEALS);
+  if (seals == -1 || (seals & READONLY_SEALS) != READONLY_SEALS)
+    {
+      meta_wayland_icc_profile_prepare_mem_async (icc_fd,
+                                                  0,
+                                                  icc_length,
+                                                  send_info_on_icc_profile_mem_prepared,
+                                                  info_resource);
+      return;
+    }
+
+  xx_image_description_info_v4_send_icc_file (info_resource,
+                                              icc_fd,
+                                              icc_length);
+}
+
+static void
+send_information_from_params (struct wl_resource *info_resource,
+                              ClutterColorState  *color_state)
 {
   enum xx_color_manager_v4_primaries primaries_named;
   enum xx_color_manager_v4_transfer_function tf;
@@ -434,6 +515,18 @@ send_information (struct wl_resource *info_resource,
                                                 float_to_scaled_uint32 (lum->min),
                                                 (uint32_t) lum->max,
                                                 (uint32_t) lum->ref);
+}
+
+static void
+send_information (struct wl_resource *info_resource,
+                  ClutterColorState  *color_state)
+{
+  if (CLUTTER_IS_COLOR_STATE_ICC (color_state))
+    send_information_from_icc_profile (info_resource, color_state);
+  else if (CLUTTER_IS_COLOR_STATE_PARAMS (color_state))
+    send_information_from_params (info_resource, color_state);
+  else
+    g_assert_not_reached ();
 }
 
 static void
@@ -866,6 +959,181 @@ static const struct xx_color_management_output_v4_interface
 {
   color_management_output_destroy,
   color_management_output_get_image_description,
+};
+
+static MetaWaylandCreatorIcc *
+meta_wayland_creator_icc_new (MetaWaylandColorManager *color_manager,
+                              struct wl_resource      *resource)
+{
+  MetaWaylandCreatorIcc *creator_icc;
+
+  creator_icc = g_new0 (MetaWaylandCreatorIcc, 1);
+  creator_icc->color_manager = color_manager;
+  creator_icc->resource = resource;
+  creator_icc->fd = -1;
+
+  return creator_icc;
+}
+
+static void
+meta_wayland_creator_icc_free (MetaWaylandCreatorIcc *creator_icc)
+{
+  g_clear_fd (&creator_icc->fd, NULL);
+  g_free (creator_icc);
+}
+
+static void
+creator_icc_destructor (struct wl_resource *resource)
+{
+  MetaWaylandCreatorIcc *creator_icc = wl_resource_get_user_data (resource);
+
+  meta_wayland_creator_icc_free (creator_icc);
+}
+
+static void
+create_on_icc_profile_mem_prepared (GObject      *source_object,
+                                    GAsyncResult *result,
+                                    gpointer      user_data)
+{
+  MetaWaylandCreatorIcc *creator_icc = user_data;
+  MetaWaylandColorManager *color_manager = creator_icc->color_manager;
+  ClutterContext *clutter_context = get_clutter_context (color_manager);
+  struct wl_resource *image_desc_resource = creator_icc->image_desc_resource;
+  struct wl_resource *resource = creator_icc->resource;
+  g_autoptr (ClutterColorState) color_state = NULL;
+  g_autoptr (GError) error = NULL;
+  g_autofd int icc_fd = -1;
+  uint32_t icc_length = 0;
+  MetaWaylandImageDescription *image_desc;
+
+  if (!meta_wayland_icc_profile_prepare_mem_finish (result,
+                                                    &icc_fd,
+                                                    &icc_length,
+                                                    &error))
+    {
+      xx_image_description_v4_send_failed (image_desc_resource,
+                                           XX_IMAGE_DESCRIPTION_V4_CAUSE_OPERATING_SYSTEM,
+                                           error->message);
+      return;
+    }
+
+  color_state = clutter_color_state_icc_new (clutter_context, icc_fd, icc_length);
+  if (!color_state)
+    {
+      xx_image_description_v4_send_failed (image_desc_resource,
+                                           XX_IMAGE_DESCRIPTION_V4_CAUSE_OPERATING_SYSTEM,
+                                           "Failed creating color state from ICC data");
+      return;
+    }
+
+  image_desc =
+    meta_wayland_image_description_new_color_state (color_manager,
+                                                    image_desc_resource,
+                                                    color_state,
+                                                    META_WAYLAND_IMAGE_DESCRIPTION_FLAGS_DEFAULT);
+
+  wl_resource_set_implementation (image_desc_resource,
+                                  &meta_wayland_image_description_interface,
+                                  image_desc,
+                                  image_description_destructor);
+
+  wl_resource_destroy (resource);
+}
+
+static void
+creator_icc_create (struct wl_client   *client,
+                    struct wl_resource *resource,
+                    uint32_t            id)
+{
+  MetaWaylandCreatorIcc *creator_icc = wl_resource_get_user_data (resource);
+  struct wl_resource *image_desc_resource;
+  struct stat stat;
+
+  if (creator_icc->fd == -1)
+    {
+      wl_resource_post_error (resource,
+                              XX_IMAGE_DESCRIPTION_CREATOR_ICC_V4_ERROR_INCOMPLETE_SET,
+                              "The ICC file has not been set");
+      return;
+    }
+
+  image_desc_resource =
+    wl_resource_create (client,
+                        &xx_image_description_v4_interface,
+                        wl_resource_get_version (resource),
+                        id);
+
+  if (fstat (creator_icc->fd, &stat) == -1)
+    {
+      xx_image_description_v4_send_failed (image_desc_resource,
+                                           XX_IMAGE_DESCRIPTION_V4_CAUSE_OPERATING_SYSTEM,
+                                           "Couldn't fstat the ICC profile fd");
+      return;
+    }
+
+  if (stat.st_size < creator_icc->offset + creator_icc->length)
+    {
+      wl_resource_post_error (resource,
+                              XX_IMAGE_DESCRIPTION_CREATOR_ICC_V4_ERROR_OUT_OF_FILE,
+                              "ICC file shorter than expected");
+      return;
+    }
+
+  creator_icc->image_desc_resource = image_desc_resource;
+
+  meta_wayland_icc_profile_prepare_mem_async (creator_icc->fd,
+                                              creator_icc->offset,
+                                              creator_icc->length,
+                                              create_on_icc_profile_mem_prepared,
+                                              creator_icc);
+}
+
+static void
+creator_icc_set_icc_file (struct wl_client   *client,
+                          struct wl_resource *resource,
+                          int32_t             icc_profile_fd,
+                          uint32_t            offset,
+                          uint32_t            length)
+{
+  MetaWaylandCreatorIcc *creator_icc = wl_resource_get_user_data (resource);
+  int flags;
+
+  if (creator_icc->fd > 0)
+    {
+      wl_resource_post_error (resource,
+                              XX_IMAGE_DESCRIPTION_CREATOR_ICC_V4_ERROR_ALREADY_SET,
+                              "The ICC file was already set");
+      return;
+    }
+
+  flags = fcntl (icc_profile_fd, F_GETFL);
+  if ((flags & O_ACCMODE) == O_WRONLY ||
+      lseek (icc_profile_fd, 0, SEEK_CUR) < 0)
+    {
+      wl_resource_post_error (resource,
+                              XX_IMAGE_DESCRIPTION_CREATOR_ICC_V4_ERROR_BAD_FD,
+                              "The ICC file is not readable and seekable");
+      return;
+    }
+
+  if (length == 0 || length > (4 * 1024 * 1024))
+    {
+      wl_resource_post_error (resource,
+                              XX_IMAGE_DESCRIPTION_CREATOR_ICC_V4_ERROR_BAD_SIZE,
+                              "The size is 0 or bigger than 4 MB");
+      return;
+    }
+
+  creator_icc->fd = icc_profile_fd;
+  creator_icc->offset = offset;
+  creator_icc->length = length;
+}
+
+static const struct xx_image_description_creator_icc_v4_interface
+  meta_wayland_image_description_creator_icc_interface =
+{
+  creator_icc_create,
+  creator_icc_set_icc_file,
 };
 
 static MetaWaylandCreatorParams *
@@ -1372,9 +1640,22 @@ color_manager_new_icc_creator (struct wl_client   *client,
                                struct wl_resource *resource,
                                uint32_t            id)
 {
-  wl_resource_post_error (resource,
-                          XX_COLOR_MANAGER_V4_ERROR_UNSUPPORTED_FEATURE,
-                          "ICC-based image description creator is unsupported");
+  MetaWaylandColorManager *color_manager = wl_resource_get_user_data (resource);
+  MetaWaylandCreatorIcc *creator_icc;
+  struct wl_resource *creator_resource;
+
+  creator_resource =
+    wl_resource_create (client,
+                        &xx_image_description_creator_icc_v4_interface,
+                        wl_resource_get_version (resource),
+                        id);
+
+  creator_icc = meta_wayland_creator_icc_new (color_manager, creator_resource);
+
+  wl_resource_set_implementation (creator_resource,
+                                  &meta_wayland_image_description_creator_icc_interface,
+                                  creator_icc,
+                                  creator_icc_destructor);
 }
 
 static void
@@ -1406,6 +1687,8 @@ color_manager_send_supported_events (struct wl_resource *resource)
 {
   xx_color_manager_v4_send_supported_intent (resource,
                                              XX_COLOR_MANAGER_V4_RENDER_INTENT_PERCEPTUAL);
+  xx_color_manager_v4_send_supported_feature (resource,
+                                              XX_COLOR_MANAGER_V4_FEATURE_ICC_V2_V4);
   xx_color_manager_v4_send_supported_feature (resource,
                                               XX_COLOR_MANAGER_V4_FEATURE_PARAMETRIC);
   xx_color_manager_v4_send_supported_feature (resource,
