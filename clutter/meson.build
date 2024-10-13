@@ -30,6 +30,7 @@ clutter_pkg_deps = [
   gio_dep,
   pango_dep,
   harfbuzz_dep,
+  lcms2_dep,
 ]
 
 clutter_pkg_private_deps = [
