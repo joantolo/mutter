@@ -50,6 +50,7 @@
 #include "clutter/clutter-color-state-private.h"
 
 #include "clutter/clutter-color-manager-private.h"
+#include "clutter/clutter-color-state-icc.h"
 #include "clutter/clutter-main.h"
 
 enum
@@ -82,7 +83,8 @@ clutter_color_transform_key_hash (gconstpointer data)
   return key->source_eotf_bits << 0 &
          key->target_eotf_bits << 4 &
          key->luminance_bit    << 8 &
-         key->color_trans_bit  << 9;
+         key->color_trans_bit  << 9 &
+         key->icc_bit          << 10;
 }
 
 gboolean
@@ -95,7 +97,8 @@ clutter_color_transform_key_equal (gconstpointer data1,
   return (key1->source_eotf_bits == key2->source_eotf_bits &&
           key1->target_eotf_bits == key2->target_eotf_bits &&
           key1->luminance_bit == key2->luminance_bit &&
-          key1->color_trans_bit == key2->color_trans_bit);
+          key1->color_trans_bit == key2->color_trans_bit &&
+          key1->icc_bit == key2->icc_bit);
 }
 
 void
@@ -108,6 +111,14 @@ clutter_color_transform_key_init (ClutterColorTransformKey *key,
 
   g_return_if_fail (CLUTTER_IS_COLOR_STATE (color_state));
   g_return_if_fail (CLUTTER_IS_COLOR_STATE (target_color_state));
+
+  if (G_OBJECT_TYPE (color_state) != G_OBJECT_TYPE (target_color_state))
+    {
+      clutter_color_state_icc_init_color_transform_key (color_state,
+                                                        target_color_state,
+                                                        key);
+      return;
+    }
 
   color_state_class->init_color_transform_key (color_state,
                                                target_color_state,
@@ -351,9 +362,31 @@ clutter_color_state_do_transform (ClutterColorState *color_state,
 {
   ClutterColorStateClass *color_state_class =
     CLUTTER_COLOR_STATE_GET_CLASS (color_state);
+  g_autoptr (ClutterColorState) color_state_icc = NULL;
+  g_autoptr (ClutterColorState) target_color_state_icc = NULL;
 
   g_return_if_fail (CLUTTER_IS_COLOR_STATE (color_state));
   g_return_if_fail (CLUTTER_IS_COLOR_STATE (target_color_state));
+
+  if (G_OBJECT_TYPE (color_state) != G_OBJECT_TYPE (target_color_state))
+    {
+      color_state_icc =
+        clutter_color_state_icc_new_from_params (color_state);
+      target_color_state_icc =
+        clutter_color_state_icc_new_from_params (target_color_state);
+      if (!color_state_icc || !target_color_state_icc)
+        {
+          g_warning ("Failed generating ColorStateIcc from ColorStateParams");
+          return;
+        }
+
+      clutter_color_state_icc_do_transform (color_state_icc,
+                                            target_color_state_icc,
+                                            input,
+                                            output,
+                                            n_samples);
+      return;
+    }
 
   color_state_class->do_transform (color_state,
                                    target_color_state,

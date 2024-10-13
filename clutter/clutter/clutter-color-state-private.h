@@ -34,6 +34,8 @@ typedef struct _ClutterColorTransformKey
   guint luminance_bit    : 1;
   /* When there is a color trans snippet */
   guint color_trans_bit  : 1;
+  /* When there is a 3D LUT snippet (only icc profiles) */
+  guint icc_bit          : 1;
 } ClutterColorTransformKey;
 
 void clutter_color_transform_key_init (ClutterColorTransformKey *key,
