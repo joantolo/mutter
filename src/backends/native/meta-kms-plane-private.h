@@ -43,6 +43,7 @@ typedef enum _MetaKmsPlaneProp
   META_KMS_PLANE_PROP_HOTSPOT_X,
   META_KMS_PLANE_PROP_HOTSPOT_Y,
   META_KMS_PLANE_PROP_SIZE_HINTS,
+  META_KMS_PLANE_PROP_COLOR_PIPELINE,
   META_KMS_PLANE_N_PROPS
 } MetaKmsPlaneProp;
 
@@ -67,6 +68,17 @@ typedef enum _MetaKmsPlaneRotation
   META_KMS_PLANE_ROTATION_REFLECT_Y = (1 << 5),
   META_KMS_PLANE_ROTATION_UNKNOWN = (1 << 6),
 } MetaKmsPlaneRotation;
+
+typedef enum _MetaKmsPlaneColorPipeline
+{
+  META_KMS_PLANE_COLOR_PIPELINE_BYPASS,
+  META_KMS_PLANE_COLOR_PIPELINE_1,
+  META_KMS_PLANE_COLOR_PIPELINE_2,
+  META_KMS_PLANE_COLOR_PIPELINE_3,
+  META_KMS_PLANE_COLOR_PIPELINE_4,
+  META_KMS_PLANE_COLOR_PIPELINE_5,
+  META_KMS_PLANE_COLOR_PIPELINE_N_PROPS,
+} MetaKmsPlaneColorPipeline;
 
 MetaKmsPlane * meta_kms_plane_new (MetaKmsPlaneType         type,
                                    MetaKmsImplDevice       *impl_device,

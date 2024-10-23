@@ -34,6 +34,7 @@ typedef struct _MetaKmsPlanePropTable
 {
   MetaKmsProp props[META_KMS_PLANE_N_PROPS];
   MetaKmsEnum rotation_bitmask[META_KMS_PLANE_ROTATION_BIT_N_PROPS];
+  MetaKmsEnum color_pipelines[META_KMS_PLANE_COLOR_PIPELINE_N_PROPS];
 } MetaKmsPlanePropTable;
 
 struct _MetaKmsPlane
@@ -618,6 +619,18 @@ init_properties (MetaKmsPlane            *plane,
           .name = "SIZE_HINTS",
           .type = DRM_MODE_PROP_BLOB,
         },
+      [META_KMS_PLANE_PROP_COLOR_PIPELINE] =
+        {
+          /* TODO:
+           * The value is probably a colorop id.
+           * Use that index when add property to atomic commit.
+           */
+          .name = "COLOR_PIPELINE",
+          .type = DRM_MODE_PROP_ENUM,
+          .enum_values = prop_table->color_pipelines,
+          .num_enum_values = META_KMS_PLANE_COLOR_PIPELINE_N_PROPS,
+          .default_value = META_KMS_PLANE_COLOR_PIPELINE_BYPASS,
+        },
     },
     .rotation_bitmask = {
       [META_KMS_PLANE_ROTATION_BIT_ROTATE_0] =
@@ -649,6 +662,32 @@ init_properties (MetaKmsPlane            *plane,
         {
           .name = "reflect-y",
           .bitmask = META_KMS_PLANE_ROTATION_REFLECT_Y,
+        },
+    },
+    .color_pipelines = {
+      [META_KMS_PLANE_COLOR_PIPELINE_BYPASS] =
+        {
+          .name = "Bypass",
+        },
+      [META_KMS_PLANE_COLOR_PIPELINE_1] =
+        {
+          .name = "Color Pipeline (?)",
+        },
+      [META_KMS_PLANE_COLOR_PIPELINE_2] =
+        {
+          .name = "Color Pipeline (?)",
+        },
+      [META_KMS_PLANE_COLOR_PIPELINE_3] =
+        {
+          .name = "Color Pipeline (?)",
+        },
+      [META_KMS_PLANE_COLOR_PIPELINE_4] =
+        {
+          .name = "Color Pipeline (?)",
+        },
+      [META_KMS_PLANE_COLOR_PIPELINE_5] =
+        {
+          .name = "Color Pipeline (?)",
         },
     },
   };

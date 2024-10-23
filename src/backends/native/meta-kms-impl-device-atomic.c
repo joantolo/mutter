@@ -58,6 +58,10 @@ initable_iface_init (GInitableIface *iface);
 #define DRM_CLIENT_CAP_CURSOR_PLANE_HOTSPOT	6
 #endif
 
+#ifndef DRM_CLIENT_CAP_PLANE_COLOR_PIPELINE
+#define DRM_CLIENT_CAP_PLANE_COLOR_PIPELINE 7
+#endif
+
 G_DEFINE_TYPE_WITH_CODE (MetaKmsImplDeviceAtomic, meta_kms_impl_device_atomic,
                          META_TYPE_KMS_IMPL_DEVICE,
                          G_IMPLEMENT_INTERFACE (G_TYPE_INITABLE,
@@ -1344,6 +1348,9 @@ meta_kms_impl_device_atomic_open_device_file (MetaKmsImplDevice  *impl_device,
                        "DRM_CLIENT_CAP_ATOMIC not supported");
           return NULL;
         }
+
+      if (drmSetClientCap (fd, DRM_CLIENT_CAP_PLANE_COLOR_PIPELINE, 1) != 0)
+        g_warning ("DRM_CLIENT_CAP_PLANE_COLOR_PIPELINE not supported");
 
       meta_device_file_tag (device_file,
                             META_DEVICE_FILE_TAG_KMS,

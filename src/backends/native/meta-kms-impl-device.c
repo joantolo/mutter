@@ -858,6 +858,30 @@ update_prop_value (MetaKmsProp *prop,
 }
 
 static void
+update_color_pipeline_enum_values (MetaKmsProp        *prop,
+                                   drmModePropertyRes *drm_prop)
+{
+  int i, j;
+
+  for (i = 0; i < drm_prop->count_enums; i++)
+    {
+      for (j = 0; j < prop->num_enum_values; j++)
+        {
+          if (prop->enum_values[j].valid)
+            continue;
+
+          if (g_str_has_prefix (prop->enum_values[j].name, "Color Pipeline") &&
+              g_str_has_prefix (drm_prop->enums[i].name, "Color Pipeline"))
+            {
+              prop->enum_values[j].value = drm_prop->enums[i].value;
+              prop->enum_values[j].valid = TRUE;
+              break;
+            }
+        }
+    }
+}
+
+static void
 update_prop_enum_values (MetaKmsProp        *prop,
                          drmModePropertyRes *drm_prop)
 {
@@ -877,6 +901,9 @@ update_prop_enum_values (MetaKmsProp        *prop,
             }
         }
     }
+
+  if (g_str_equal (prop->name, "COLOR_PIPELINE"))
+    update_color_pipeline_enum_values (prop, drm_prop);
 }
 
 static MetaKmsProp *
