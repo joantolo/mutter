@@ -47,6 +47,17 @@ typedef enum _MetaKmsPlaneYCbCrColorRanges
   META_KMS_PLANE_YCBCR_COLOR_RANGE_N_PROPS,
 } MetaKmsPlaneYCbCrColorRange;
 
+typedef enum _MetaKmsPlaneColorPipeline
+{
+  META_KMS_PLANE_COLOR_PIPELINE_BYPASS = 0,
+  META_KMS_PLANE_COLOR_PIPELINE_1,
+  META_KMS_PLANE_COLOR_PIPELINE_2,
+  META_KMS_PLANE_COLOR_PIPELINE_3,
+  META_KMS_PLANE_COLOR_PIPELINE_4,
+  META_KMS_PLANE_COLOR_PIPELINE_5,
+  META_KMS_PLANE_COLOR_PIPELINE_N_PROPS,
+} MetaKmsPlaneColorPipeline;
+
 typedef struct _MetaKmsPlaneCursorSizeHints
 {
   gboolean has_size_hints;

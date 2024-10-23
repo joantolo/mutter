@@ -36,6 +36,7 @@ typedef struct _MetaKmsPlanePropTable
   MetaKmsEnum rotation_bitmask[META_KMS_PLANE_ROTATION_BIT_N_PROPS];
   MetaKmsEnum color_encodings[META_KMS_PLANE_YCBCR_COLOR_ENCODING_N_PROPS];
   MetaKmsEnum color_ranges[META_KMS_PLANE_YCBCR_COLOR_RANGE_N_PROPS];
+  MetaKmsEnum color_pipelines[META_KMS_PLANE_COLOR_PIPELINE_N_PROPS];
 } MetaKmsPlanePropTable;
 
 struct _MetaKmsPlane
@@ -684,6 +685,14 @@ init_properties (MetaKmsPlane            *plane,
           .num_enum_values = META_KMS_PLANE_YCBCR_COLOR_RANGE_N_PROPS,
           .default_value = META_KMS_PLANE_YCBCR_COLOR_RANGE_LIMITED,
         },
+      [META_KMS_PLANE_PROP_COLOR_PIPELINE] =
+        {
+          .name = "COLOR_PIPELINE",
+          .type = DRM_MODE_PROP_ENUM,
+          .enum_values = prop_table->color_pipelines,
+          .num_enum_values = META_KMS_PLANE_COLOR_PIPELINE_N_PROPS,
+          .default_value = META_KMS_PLANE_COLOR_PIPELINE_BYPASS,
+        },
     },
     .rotation_bitmask = {
       [META_KMS_PLANE_ROTATION_BIT_ROTATE_0] =
@@ -739,6 +748,32 @@ init_properties (MetaKmsPlane            *plane,
       [META_KMS_PLANE_YCBCR_COLOR_RANGE_FULL] =
         {
           .name = "YCbCr full range",
+        },
+    },
+    .color_pipelines = {
+      [META_KMS_PLANE_COLOR_PIPELINE_BYPASS] =
+        {
+          .name = "Bypass",
+        },
+      [META_KMS_PLANE_COLOR_PIPELINE_1] =
+        {
+          .name = "Color Pipeline (?)",
+        },
+      [META_KMS_PLANE_COLOR_PIPELINE_2] =
+        {
+          .name = "Color Pipeline (?)",
+        },
+      [META_KMS_PLANE_COLOR_PIPELINE_3] =
+        {
+          .name = "Color Pipeline (?)",
+        },
+      [META_KMS_PLANE_COLOR_PIPELINE_4] =
+        {
+          .name = "Color Pipeline (?)",
+        },
+      [META_KMS_PLANE_COLOR_PIPELINE_5] =
+        {
+          .name = "Color Pipeline (?)",
         },
     },
   };
