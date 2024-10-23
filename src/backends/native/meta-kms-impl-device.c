@@ -858,22 +858,25 @@ update_prop_value (MetaKmsProp *prop,
 }
 
 static void
-update_prop_enum_value(MetaKmsEnum        *prop_enum,
-                       drmModePropertyRes *drm_prop)
+update_prop_enum_values (MetaKmsProp        *prop,
+                         drmModePropertyRes *drm_prop)
 {
-  int i;
+  int i, j;
 
-  for (i = 0; i < drm_prop->count_enums; i++)
+  for (i = 0; i < prop->num_enum_values; i++)
     {
-      if (strcmp (prop_enum->name, drm_prop->enums[i].name) == 0)
+      prop->enum_values[i].valid = FALSE;
+
+      for (j = 0; j < drm_prop->count_enums; j++)
         {
-          prop_enum->value = drm_prop->enums[i].value;
-          prop_enum->valid = TRUE;
-          return;
+          if (g_str_equal (prop->enum_values[i].name, drm_prop->enums[j].name))
+            {
+              prop->enum_values[i].value = drm_prop->enums[j].value;
+              prop->enum_values[i].valid = TRUE;
+              break;
+            }
         }
     }
-
-  prop_enum->valid = FALSE;
 }
 
 static MetaKmsProp *
@@ -957,10 +960,7 @@ meta_kms_impl_device_update_prop_table (MetaKmsImplDevice *impl_device,
 
       if (prop->type == DRM_MODE_PROP_BITMASK ||
           prop->type == DRM_MODE_PROP_ENUM)
-        {
-          for (j = 0; j < prop->num_enum_values; j++)
-            update_prop_enum_value (&prop->enum_values[j], drm_prop);
-        }
+        update_prop_enum_values (prop, drm_prop);
 
       update_prop_value (prop, prop_value);
 
