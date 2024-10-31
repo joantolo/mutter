@@ -38,9 +38,25 @@ ClutterColorState * clutter_color_state_icc_new (ClutterContext *context,
                                                  uint32_t        icc_length);
 
 CLUTTER_EXPORT
+ClutterColorState * clutter_color_state_icc_new_from_params (ClutterColorState *color_state);
+
+CLUTTER_EXPORT
 int clutter_color_state_icc_get_fd (ClutterColorStateIcc *color_state_icc);
 
 CLUTTER_EXPORT
 uint32_t clutter_color_state_icc_get_length (ClutterColorStateIcc *color_state_icc);
+
+CLUTTER_EXPORT
+void clutter_color_state_icc_init_color_transform_key (ClutterColorState        *color_state,
+                                                       ClutterColorState        *target_color_state,
+                                                       ClutterColorTransformKey *key);
+CLUTTER_EXPORT
+CoglSnippet * clutter_color_state_icc_create_transform_snippet (ClutterColorState *color_state,
+                                                                ClutterColorState *target_color_state);
+
+CLUTTER_EXPORT
+void clutter_color_state_icc_update_uniforms (ClutterColorState *color_state,
+                                              ClutterColorState *target_color_state,
+                                              CoglPipeline      *pipeline);
 
 G_END_DECLS

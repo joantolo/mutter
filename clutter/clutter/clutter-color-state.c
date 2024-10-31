@@ -50,6 +50,7 @@
 #include "clutter/clutter-color-state-private.h"
 
 #include "clutter/clutter-color-manager-private.h"
+#include "clutter/clutter-color-state-icc.h"
 
 enum
 {
@@ -109,6 +110,14 @@ clutter_color_transform_key_init (ClutterColorTransformKey *key,
 
   g_return_if_fail (CLUTTER_IS_COLOR_STATE (color_state));
   g_return_if_fail (CLUTTER_IS_COLOR_STATE (target_color_state));
+
+  if (G_OBJECT_TYPE (color_state) != G_OBJECT_TYPE (target_color_state))
+    {
+      clutter_color_state_icc_init_color_transform_key (color_state,
+                                                        target_color_state,
+                                                        key);
+      return;
+    }
 
   color_state_class->init_color_transform_key (color_state,
                                                target_color_state,
@@ -222,6 +231,12 @@ clutter_color_state_create_transform_snippet (ClutterColorState *color_state,
   ClutterColorStateClass *color_state_class =
     CLUTTER_COLOR_STATE_GET_CLASS (color_state);
 
+  if (G_OBJECT_TYPE (color_state) != G_OBJECT_TYPE (target_color_state))
+    {
+      return clutter_color_state_icc_create_transform_snippet (color_state,
+                                                               target_color_state);
+    }
+
   return color_state_class->create_transform_snippet (color_state,
                                                       target_color_state);
 }
@@ -262,9 +277,30 @@ clutter_color_state_update_uniforms (ClutterColorState *color_state,
 {
   ClutterColorStateClass *color_state_class =
     CLUTTER_COLOR_STATE_GET_CLASS (color_state);
+  g_autoptr (ClutterColorState) color_state_icc = NULL;
+  g_autoptr (ClutterColorState) target_color_state_icc = NULL;
 
   g_return_if_fail (CLUTTER_IS_COLOR_STATE (color_state));
   g_return_if_fail (CLUTTER_IS_COLOR_STATE (target_color_state));
+
+  if (G_OBJECT_TYPE (color_state) != G_OBJECT_TYPE (target_color_state))
+    {
+      /* TODO: Cache uniforms to not compute them always */
+      color_state_icc =
+        clutter_color_state_icc_new_from_params (color_state);
+      target_color_state_icc =
+        clutter_color_state_icc_new_from_params (target_color_state);
+      if (!color_state_icc || !target_color_state_icc)
+        {
+          g_warning ("Failed generating ColorStateIcc from ColorStateParams");
+          return;
+        }
+
+      clutter_color_state_icc_update_uniforms (color_state_icc,
+                                               target_color_state_icc,
+                                               pipeline);
+      return;
+    }
 
   color_state_class->update_uniforms (color_state,
                                       target_color_state,

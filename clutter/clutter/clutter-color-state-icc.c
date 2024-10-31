@@ -30,11 +30,19 @@
 
 #include "clutter/clutter-color-state-icc.h"
 
+#include "clutter/clutter-color-state-params.h"
 #include "clutter/clutter-color-state-private.h"
 #include "clutter/clutter-main.h"
 
 #define UNIFORM_NAME_3D_LUT_VALUES "lut_3D_values"
 #define UNIFORM_NAME_3D_LUT_SIZE "lut_3D_size"
+
+typedef enum
+{
+  TONE_CURVE_SRGB,
+  TONE_CURVE_PQ,
+  TONE_CURVE_BT709,
+} ToneCurve;
 
 typedef struct _Clutter3DLut
 {
@@ -90,7 +98,7 @@ clutter_color_state_icc_finalize (GObject *object)
   G_OBJECT_CLASS (clutter_color_state_icc_parent_class)->finalize (object);
 }
 
-static void
+void
 clutter_color_state_icc_init_color_transform_key (ClutterColorState        *color_state,
                                                   ClutterColorState        *target_color_state,
                                                   ClutterColorTransformKey *key)
@@ -115,7 +123,7 @@ clutter_color_state_icc_init_color_transform_key (ClutterColorState        *colo
  *
  * Returns: (transfer full): The #CoglSnippet with the interpolation
  */
-static CoglSnippet *
+CoglSnippet *
 clutter_color_state_icc_create_transform_snippet (ClutterColorState *color_state,
                                                   ClutterColorState *target_color_state)
 {
@@ -411,7 +419,7 @@ upload_3d_lut_as_2d_texture (CoglPipeline *pipeline,
   return TRUE;
 }
 
-static void
+void
 clutter_color_state_icc_update_uniforms (ClutterColorState *color_state,
                                          ClutterColorState *target_color_state,
                                          CoglPipeline      *pipeline)
@@ -606,7 +614,7 @@ estimate_eotf_curves (cmsHPROFILE  *icc_profile,
                                   TYPE_RGB_FLT,
                                   xyz_profile,
                                   TYPE_XYZ_FLT,
-                                  INTENT_ABSOLUTE_COLORIMETRIC,
+                                  INTENT_PERCEPTUAL,
                                   0);
   if (!transform)
     return;
@@ -717,6 +725,333 @@ get_checksum (cmsHPROFILE *icc_profile,
     }
 
   return TRUE;
+}
+
+static void
+get_white_point (ClutterColorStateParams *color_state_params,
+                 cmsCIEXYZ               *white_point_XYZ)
+{
+  const ClutterColorimetry *colorimetry;
+  const ClutterPrimaries *primaries;
+  cmsCIExyY white_point_xyY;
+
+  colorimetry = clutter_color_state_params_get_colorimetry (color_state_params);
+  switch (colorimetry->type)
+    {
+    case CLUTTER_COLORIMETRY_TYPE_COLORSPACE:
+      primaries = clutter_colorspace_to_primaries (colorimetry->colorspace);
+      break;
+    case CLUTTER_COLORIMETRY_TYPE_PRIMARIES:
+      primaries = colorimetry->primaries;
+      break;
+    }
+
+  white_point_xyY = (cmsCIExyY) { primaries->w_x, primaries->w_y, 1.0f };
+  cmsxyY2XYZ (white_point_XYZ, &white_point_xyY);
+}
+
+static void
+get_luminance_mapping_matrices (ClutterColorStateParams *color_state_params,
+                                graphene_matrix_t       *to_pcs,
+                                graphene_matrix_t       *to_rgb)
+{
+  const ClutterLuminance *lum;
+  float inv_scale, scale;
+
+  lum = clutter_color_state_params_get_luminance (color_state_params);
+
+  inv_scale = lum->max / lum->ref;
+  graphene_matrix_init_from_float (
+    to_pcs,
+    (float [16]) {
+    inv_scale, 0, 0, 0,
+    0, inv_scale, 0, 0,
+    0, 0, inv_scale, 0,
+    0, 0, 0, 1,
+  });
+
+  scale = lum->ref / lum->max;
+  graphene_matrix_init_from_float (
+    to_rgb,
+    (float [16]) {
+    scale, 0, 0, 0,
+    0, scale, 0, 0,
+    0, 0, scale, 0,
+    0, 0, 0, 1,
+  });
+}
+
+static void
+get_transform_matrices (ClutterColorStateParams *color_state_params,
+                        cmsFloat64Number         to_pcs_perceptual[9],
+                        cmsFloat64Number         to_rgb_perceptual[9])
+{
+  graphene_matrix_t rgb_to_xyz, xyz_to_rgb;
+  graphene_matrix_t to_d50, from_d50;
+  graphene_matrix_t lum_to_pcs, lum_to_rgb;
+  graphene_matrix_t to_pcs_merged, to_rgb_merged;
+
+  if (!clutter_color_state_params_get_color_space_trans_matrices (
+        color_state_params,
+        &rgb_to_xyz,
+        &xyz_to_rgb))
+    {
+      g_warning ("Failed getting color transformation matrices");
+      graphene_matrix_init_identity (&rgb_to_xyz);
+      graphene_matrix_init_identity (&xyz_to_rgb);
+    }
+
+  if (!clutter_color_state_params_get_d50_chromatic_adaptation (
+        color_state_params,
+        &to_d50,
+        &from_d50))
+    {
+      g_warning ("Failed getting chromatic adaptation matrices");
+      graphene_matrix_init_identity (&to_d50);
+      graphene_matrix_init_identity (&from_d50);
+    }
+
+  get_luminance_mapping_matrices (color_state_params,
+                                  &lum_to_pcs,
+                                  &lum_to_rgb);
+
+  /* Res = lum * to_d50 * rgb_to_xyz */
+  graphene_matrix_multiply (&rgb_to_xyz, &to_d50, &to_pcs_merged);
+  graphene_matrix_multiply (&to_pcs_merged, &lum_to_pcs, &to_pcs_merged);
+  to_pcs_perceptual[0] = graphene_matrix_get_value (&to_pcs_merged, 0, 0);
+  to_pcs_perceptual[1] = graphene_matrix_get_value (&to_pcs_merged, 0, 1);
+  to_pcs_perceptual[2] = graphene_matrix_get_value (&to_pcs_merged, 0, 2);
+  to_pcs_perceptual[3] = graphene_matrix_get_value (&to_pcs_merged, 1, 0);
+  to_pcs_perceptual[4] = graphene_matrix_get_value (&to_pcs_merged, 1, 1);
+  to_pcs_perceptual[5] = graphene_matrix_get_value (&to_pcs_merged, 1, 2);
+  to_pcs_perceptual[6] = graphene_matrix_get_value (&to_pcs_merged, 2, 0);
+  to_pcs_perceptual[7] = graphene_matrix_get_value (&to_pcs_merged, 2, 1);
+  to_pcs_perceptual[8] = graphene_matrix_get_value (&to_pcs_merged, 2, 2);
+
+  /* Res = xyz_to_rgb * from_d50 * lum */
+  graphene_matrix_multiply (&lum_to_rgb, &from_d50, &to_rgb_merged);
+  graphene_matrix_multiply (&to_rgb_merged, &xyz_to_rgb, &to_rgb_merged);
+  to_rgb_perceptual[0] = graphene_matrix_get_value (&to_rgb_merged, 0, 0);
+  to_rgb_perceptual[1] = graphene_matrix_get_value (&to_rgb_merged, 0, 1);
+  to_rgb_perceptual[2] = graphene_matrix_get_value (&to_rgb_merged, 0, 2);
+  to_rgb_perceptual[3] = graphene_matrix_get_value (&to_rgb_merged, 1, 0);
+  to_rgb_perceptual[4] = graphene_matrix_get_value (&to_rgb_merged, 1, 1);
+  to_rgb_perceptual[5] = graphene_matrix_get_value (&to_rgb_merged, 1, 2);
+  to_rgb_perceptual[6] = graphene_matrix_get_value (&to_rgb_merged, 2, 0);
+  to_rgb_perceptual[7] = graphene_matrix_get_value (&to_rgb_merged, 2, 1);
+  to_rgb_perceptual[8] = graphene_matrix_get_value (&to_rgb_merged, 2, 2);
+}
+
+static void
+build_tone_curves (ToneCurve      tone_curve,
+                   cmsToneCurve **eotf_curve,
+                   cmsToneCurve **inv_eotf_curve)
+{
+  int i;
+  float t, step;
+  float c1, c2, c3, m1, m2, oo_m1, oo_m2, t_pow_m1, num, den;
+  int n_points = 1024;
+  float values[n_points];
+  float inv_values[n_points];
+
+  step = 1.0f / (n_points - 1);
+
+  switch (tone_curve)
+    {
+    case TONE_CURVE_SRGB:
+      for (i = 0, t = 0.0f; i < n_points; i++, t += step)
+        {
+          if (t <= 0.04045f)
+            values[i] = t / 12.92f;
+          else
+            values[i] = powf ((t + 0.055f) / 1.055f, 12.0f / 5.0f);
+
+          if (t <= 0.0031308f)
+            inv_values[i] = t * 12.92f;
+          else
+            inv_values[i] = powf (t, (5.0f / 12.0f)) * 1.055f - 0.055f;
+        }
+      break;
+    case TONE_CURVE_PQ:
+      c1 = 0.8359375f;
+      c2 = 18.8515625f;
+      c3 = 18.6875f;
+      m1 = 0.1593017f;
+      m2 = 78.84375f;
+      oo_m1 = 1.0f / m1;
+      oo_m2 = 1.0f / m2;
+      for (i = 0, t = 0.0f; i < n_points; i++, t += step)
+        {
+          num = MAX (powf (t, oo_m2) - c1, 0.0f);
+          den = c2 - c3 * powf (t, oo_m2);
+          values[i] = powf (num / den, oo_m1);
+
+          t_pow_m1 = powf (t, m1);
+          num = c1 + c2 * t_pow_m1;
+          den = 1.0f + c3 * t_pow_m1;
+          inv_values[i] = powf (num / den, m2);
+        }
+      break;
+    case TONE_CURVE_BT709:
+      for (i = 0, t = 0.0f; i < n_points; i++, t += step)
+        {
+          if (t < 0.08124f)
+            values[i] = t / 4.5f;
+          else
+            values[i] = powf ((t + 0.099f) / 1.099f, 1.0f / 0.45f);
+
+          if (t < 0.018f)
+            inv_values[i] = t * 4.5f;
+          else
+            inv_values[i] = 1.099f * powf (t, 0.45f) - 0.099f;
+        }
+      break;
+    }
+
+  *eotf_curve = cmsBuildTabulatedToneCurveFloat (NULL, n_points, values);
+  *inv_eotf_curve = cmsBuildTabulatedToneCurveFloat (NULL, n_points, inv_values);
+}
+
+static void
+get_eotf_curves (ClutterColorStateParams  *color_state_params,
+                 cmsToneCurve             *eotf_curves[3],
+                 cmsToneCurve             *inv_eotf_curves[3])
+{
+  const ClutterEOTF *eotf;
+  cmsToneCurve *eotf_curve = NULL;
+  cmsToneCurve *inv_eotf_curve = NULL;
+
+  eotf = clutter_color_state_params_get_eotf (color_state_params);
+  switch (eotf->type)
+    {
+    case CLUTTER_EOTF_TYPE_NAMED:
+      switch (eotf->tf_name)
+        {
+        case CLUTTER_TRANSFER_FUNCTION_SRGB:
+          build_tone_curves (TONE_CURVE_SRGB,
+                             &eotf_curve,
+                             &inv_eotf_curve);
+          break;
+        case CLUTTER_TRANSFER_FUNCTION_PQ:
+          build_tone_curves (TONE_CURVE_PQ,
+                             &eotf_curve,
+                             &inv_eotf_curve);
+          break;
+        case CLUTTER_TRANSFER_FUNCTION_BT709:
+          build_tone_curves (TONE_CURVE_BT709,
+                             &eotf_curve,
+                             &inv_eotf_curve);
+          break;
+        case CLUTTER_TRANSFER_FUNCTION_LINEAR:
+          eotf_curve = cmsBuildGamma (NULL, 1.0);
+          inv_eotf_curve = cmsBuildGamma (NULL, 1.0);
+          break;
+        }
+      break;
+    case CLUTTER_EOTF_TYPE_GAMMA:
+      eotf_curve = cmsBuildGamma (NULL, eotf->gamma_exp);
+      inv_eotf_curve = cmsBuildGamma (NULL, 1.0f / eotf->gamma_exp);
+      break;
+    }
+
+  if (!eotf_curve || !inv_eotf_curve)
+    {
+      g_warning ("Failed generating eotf curves");
+      eotf_curve = cmsBuildGamma (NULL, 1.0);
+      inv_eotf_curve = cmsBuildGamma (NULL, 1.0);
+    }
+
+  eotf_curves[0] = eotf_curve;
+  eotf_curves[1] = eotf_curve;
+  eotf_curves[2] = eotf_curve;
+
+  inv_eotf_curves[0] = inv_eotf_curve;
+  inv_eotf_curves[1] = inv_eotf_curve;
+  inv_eotf_curves[2] = inv_eotf_curve;
+}
+
+/**
+ * clutter_color_state_icc_new_from_params:
+ *
+ * Create a new ClutterColorStateIcc object generating an ICC profile from
+ * a color state params.
+ *
+ * Return value: A new ClutterColorState object.
+ **/
+ClutterColorState *
+clutter_color_state_icc_new_from_params (ClutterColorState *color_state)
+{
+  ClutterColorStateParams *color_state_params;
+  ClutterColorStateIcc *color_state_icc;
+  ClutterContext *context;
+  g_autoptr (GError) error = NULL;
+  g_autoptr (cmsHPROFILE) icc_profile = NULL;
+  g_autoptr (cmsHPROFILE) eotf_profile = NULL;
+  g_autoptr (cmsHPROFILE) inv_eotf_profile = NULL;
+  cmsCIEXYZ white_point;
+  cmsStage *stage;
+  cmsPipeline *D_to_B_0, *B_to_D_0;
+  cmsFloat64Number to_pcs_perc[9], to_rgb_perc[9];
+  cmsToneCurve *eotf_curves[3], *inv_eotf_curves[3];
+
+  if (CLUTTER_IS_COLOR_STATE_ICC (color_state))
+    return g_object_ref (color_state);
+
+  color_state_params = CLUTTER_COLOR_STATE_PARAMS (color_state);
+  get_white_point (color_state_params, &white_point);
+  get_transform_matrices (color_state_params,
+                          to_pcs_perc,
+                          to_rgb_perc);
+  get_eotf_curves (color_state_params,
+                   eotf_curves,
+                   inv_eotf_curves);
+
+  icc_profile = cmsCreateProfilePlaceholder (NULL);
+  cmsSetProfileVersion (icc_profile, 4.3);
+  cmsSetDeviceClass (icc_profile, cmsSigDisplayClass);
+  cmsSetColorSpace (icc_profile, cmsSigRgbData);
+  cmsSetPCS (icc_profile, cmsSigXYZData);
+  cmsWriteTag (icc_profile, cmsSigMediaWhitePointTag, &white_point);
+
+  /* Perceptual rendering intent (DtoB0/BtoD0) */
+  D_to_B_0 = cmsPipelineAlloc (NULL, 3, 3);
+  stage = cmsStageAllocToneCurves (NULL, 3, eotf_curves);
+  cmsPipelineInsertStage (D_to_B_0, cmsAT_END, stage);
+  stage = cmsStageAllocMatrix (NULL, 3, 3, to_pcs_perc, NULL);
+  cmsPipelineInsertStage (D_to_B_0, cmsAT_END, stage);
+  cmsWriteTag (icc_profile, cmsSigDToB0Tag, D_to_B_0);
+
+  B_to_D_0 = cmsPipelineAlloc (NULL, 3, 3);
+  stage = cmsStageAllocMatrix (NULL, 3, 3, to_rgb_perc, NULL);
+  cmsPipelineInsertStage (B_to_D_0, cmsAT_END, stage);
+  stage = cmsStageAllocToneCurves (NULL, 3, inv_eotf_curves);
+  cmsPipelineInsertStage (B_to_D_0, cmsAT_END, stage);
+  cmsWriteTag (icc_profile, cmsSigBToD0Tag, B_to_D_0);
+
+  cmsPipelineFree (D_to_B_0);
+  cmsPipelineFree (B_to_D_0);
+  cmsFreeToneCurve (eotf_curves[0]);
+  cmsFreeToneCurve (inv_eotf_curves[0]);
+
+  if (!get_eotf_profiles (icc_profile, &eotf_profile, &inv_eotf_profile, &error))
+    {
+      g_warning ("Failed getting EOTF profiles from params: %s",
+                 error->message);
+      return NULL;
+    }
+
+  g_object_get (G_OBJECT (color_state), "context", &context, NULL);
+
+  color_state_icc = g_object_new (CLUTTER_TYPE_COLOR_STATE_ICC,
+                                  "context", context,
+                                  NULL);
+
+  color_state_icc->fd = -1;
+  color_state_icc->icc_profile = g_steal_pointer (&icc_profile);
+  color_state_icc->eotf_profile = g_steal_pointer (&eotf_profile);
+  color_state_icc->inv_eotf_profile = g_steal_pointer (&inv_eotf_profile);
+
+  return CLUTTER_COLOR_STATE (color_state_icc);
 }
 
 /**
