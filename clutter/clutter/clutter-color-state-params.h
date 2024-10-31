@@ -136,9 +136,27 @@ CLUTTER_EXPORT
 const ClutterLuminance * clutter_eotf_get_default_luminance (ClutterEOTF eotf);
 
 CLUTTER_EXPORT
+float clutter_eotf_apply (ClutterEOTF eotf,
+                          float       input);
+
+CLUTTER_EXPORT
+float clutter_eotf_apply_inv (ClutterEOTF eotf,
+                              float       input);
+
+CLUTTER_EXPORT
 const ClutterPrimaries * clutter_colorspace_to_primaries (ClutterColorspace colorspace);
 
 CLUTTER_EXPORT
 void clutter_primaries_ensure_normalized_range (ClutterPrimaries *primaries);
+
+CLUTTER_EXPORT
+gboolean clutter_color_state_params_get_color_space_trans_matrices (ClutterColorStateParams *color_state_params,
+                                                                    graphene_matrix_t       *rgb_to_xyz,
+                                                                    graphene_matrix_t       *xyz_to_rgb);
+
+CLUTTER_EXPORT
+gboolean clutter_color_state_params_get_d50_chromatic_adaptation (ClutterColorStateParams *color_state_params,
+                                                                  graphene_matrix_t       *to_D50,
+                                                                  graphene_matrix_t       *from_D50);
 
 G_END_DECLS
