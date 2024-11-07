@@ -23,6 +23,7 @@
 #include <drm_fourcc.h>
 #include <stdio.h>
 
+#include "backends/native/meta-kms-color-pipeline.h"
 #include "backends/native/meta-kms-crtc.h"
 #include "backends/native/meta-kms-impl-device.h"
 #include "backends/native/meta-kms-impl-device-atomic.h"
@@ -49,6 +50,8 @@ struct _MetaKmsPlane
   uint32_t possible_crtcs;
 
   MetaKmsPlaneRotation rotations;
+
+  GList *color_pipelines;
 
   /*
    * primary plane's supported formats and maybe modifiers
@@ -489,6 +492,40 @@ update_rotations (MetaKmsPlane *plane)
     }
 }
 
+static void
+update_color_pipelines (MetaKmsPlane      *plane,
+                        MetaKmsImplDevice *impl_device)
+{
+  unsigned int i;
+  uint64_t pipeline_id;
+  MetaKmsProp *pipelines;
+  MetaKmsColorPipeline *color_pipeline;
+  g_autoptr (GError) error = NULL;
+
+  pipelines = &plane->prop_table.props[META_KMS_PLANE_PROP_COLOR_PIPELINE];
+
+  for (i = 0; i < pipelines->num_enum_values; i++)
+    {
+      if (pipelines->enum_values[i].valid &&
+          pipelines->enum_values[i].value != 0)
+        {
+          pipeline_id = pipelines->enum_values[i].value;
+          color_pipeline = meta_kms_color_pipeline_new (impl_device,
+                                                        pipeline_id,
+                                                        &error);
+          if (!color_pipeline)
+            {
+              g_warning ("Failed creating color pipeline %lu: %s",
+                         pipeline_id, error->message);
+              continue;
+            }
+
+          plane->color_pipelines = g_list_prepend (plane->color_pipelines,
+                                                   color_pipeline);
+        }
+    }
+}
+
 static MetaKmsResourceChanges
 meta_kms_plane_read_state (MetaKmsPlane            *plane,
                            MetaKmsImplDevice       *impl_device,
@@ -508,6 +545,7 @@ meta_kms_plane_read_state (MetaKmsPlane            *plane,
   update_cursor_size_hints (plane, impl_device);
   update_rotations (plane);
   update_legacy_formats (plane, drm_plane);
+  update_color_pipelines (plane, impl_device);
 
   return changes;
 }
@@ -757,6 +795,7 @@ meta_kms_plane_finalize (GObject *object)
   g_hash_table_destroy (plane->formats_modifiers);
   g_clear_pointer (&plane->size_hints.cursor_width, g_free);
   g_clear_pointer (&plane->size_hints.cursor_height, g_free);
+  g_list_free_full (plane->color_pipelines, g_object_unref);
 
   G_OBJECT_CLASS (meta_kms_plane_parent_class)->finalize (object);
 }
