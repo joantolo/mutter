@@ -25,6 +25,7 @@ typedef struct _MetaKmsDevice MetaKmsDevice;
 typedef struct _MetaKmsPlane MetaKmsPlane;
 typedef struct _MetaKmsCrtc MetaKmsCrtc;
 typedef struct _MetaKmsConnector MetaKmsConnector;
+typedef struct _MetaKmsColorOp MetaKmsColorOp;
 
 typedef struct _MetaKmsUpdate MetaKmsUpdate;
 typedef struct _MetaKmsPlaneAssignment MetaKmsPlaneAssignment;
