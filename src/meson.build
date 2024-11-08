@@ -628,6 +628,8 @@ if have_wayland
     'wayland/meta-wayland-gtk-shell.c',
     'wayland/meta-wayland-gtk-shell.h',
     'wayland/meta-wayland.h',
+    'wayland/meta-wayland-icc-profile.c',
+    'wayland/meta-wayland-icc-profile.h',
     'wayland/meta-wayland-idle-inhibit.c',
     'wayland/meta-wayland-idle-inhibit.h',
     'wayland/meta-wayland-inhibit-shortcuts.c',
