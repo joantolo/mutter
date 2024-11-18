@@ -91,6 +91,9 @@ gboolean meta_kms_plane_is_color_encoding_handled (MetaKmsPlane                 
 gboolean meta_kms_plane_is_color_range_handled (MetaKmsPlane                *plane,
                                                 MetaKmsPlaneYCbCrColorRange  range);
 
+gboolean meta_kms_plane_is_color_pipeline_handled (MetaKmsPlane              *plane,
+                                                   MetaKmsPlaneColorPipeline  pipeline);
+
 gboolean meta_kms_plane_supports_cursor_hotspot (MetaKmsPlane *plane);
 
 GArray * meta_kms_plane_get_modifiers_for_format (MetaKmsPlane *plane,
@@ -116,5 +119,11 @@ void meta_kms_plane_update_set_color_encoding (MetaKmsPlane                   *p
 void meta_kms_plane_update_set_color_range (MetaKmsPlane                *plane,
                                             MetaKmsPlaneAssignment      *plane_assignment,
                                             MetaKmsPlaneYCbCrColorRange  range);
+
+void meta_kms_plane_update_set_color_pipeline (MetaKmsPlane              *plane,
+                                               MetaKmsPlaneAssignment    *plane_assignment,
+                                               MetaKmsPlaneColorPipeline  pipeline);
+
+GList * meta_kms_plane_get_color_pipelines (MetaKmsPlane *plane);
 
 const char * meta_kms_plane_type_to_string (MetaKmsPlaneType plane_type);

@@ -40,6 +40,7 @@
 #include "backends/native/meta-drm-buffer-import.h"
 #include "backends/native/meta-drm-buffer.h"
 #include "backends/native/meta-frame-native.h"
+#include "backends/native/meta-kms-color-pipeline.h"
 #include "backends/native/meta-kms-connector.h"
 #include "backends/native/meta-kms-device.h"
 #include "backends/native/meta-kms-plane.h"
@@ -573,6 +574,63 @@ assign_primary_plane (MetaCrtcKms            *crtc_kms,
 }
 
 static gboolean
+color_pipeline_needed (MetaOnscreenNative *onscreen_native,
+                       CoglScanout        *scanout)
+{
+  ClutterStageView *stage_view = CLUTTER_STAGE_VIEW (onscreen_native->view);
+  ClutterColorState *scanout_color_state =
+    clutter_stage_view_get_scanout_color_state (stage_view);
+  ClutterColorState *output_color_state =
+    clutter_stage_view_get_output_color_state (stage_view);
+
+  /* TODO: drop this */
+  return TRUE;
+
+  return (scanout &&
+          !clutter_color_state_equals (scanout_color_state,
+                                       output_color_state));
+}
+
+static MetaKmsColorPipeline *
+get_valid_color_pipeline (MetaKmsPlane *plane)
+{
+  GList *color_pipelines = meta_kms_plane_get_color_pipelines (plane);
+
+  for (GList *l = color_pipelines; l->data; l = l->next)
+    {
+      MetaKmsColorPipeline *color_pipeline = l->data;
+
+      if (meta_kms_color_pipeline_get_id (color_pipeline) !=
+          META_KMS_PLANE_COLOR_PIPELINE_BYPASS)
+        return color_pipeline;
+    }
+
+  return NULL;
+}
+
+static void
+apply_color_pipeline (MetaOnscreenNative     *onscreen_native,
+                      MetaCrtcKms            *crtc_kms,
+                      MetaKmsUpdate          *update,
+                      MetaKmsPlaneAssignment *plane_assignment)
+{
+  ClutterStageView *stage_view = CLUTTER_STAGE_VIEW (onscreen_native->view);
+  ClutterColorState *output_color_state =
+    clutter_stage_view_get_output_color_state (stage_view);
+  ClutterColorState *scanout_color_state =
+    clutter_stage_view_get_scanout_color_state (stage_view);
+  MetaKmsPlane *kms_plane =
+    meta_crtc_kms_get_assigned_primary_plane (crtc_kms);
+  MetaKmsColorPipeline *color_pipeline;
+
+  color_pipeline = get_valid_color_pipeline (kms_plane);
+  meta_kms_plane_update_set_color_pipeline (kms_plane,
+                                            plane_assignment,
+                                            meta_kms_color_pipeline_get_id (
+                                              color_pipeline));
+}
+
+static gboolean
 meta_onscreen_native_flip_crtc (CoglOnscreen           *onscreen,
                                 ClutterFrame           *frame,
                                 MetaRendererView       *view,
@@ -644,6 +702,13 @@ meta_onscreen_native_flip_crtc (CoglOnscreen           *onscreen,
 
       if (region && !mtk_region_is_empty (region))
         meta_kms_plane_assignment_set_fb_damage (plane_assignment, region);
+
+      if (color_pipeline_needed (onscreen_native, scanout))
+        apply_color_pipeline (onscreen_native,
+                              crtc_kms,
+                              kms_update,
+                              plane_assignment);
+
       break;
     case META_RENDERER_NATIVE_MODE_SURFACELESS:
       g_assert_not_reached ();

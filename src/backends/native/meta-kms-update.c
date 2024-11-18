@@ -677,6 +677,14 @@ meta_kms_plane_assignment_set_color_range (MetaKmsPlaneAssignment      *plane_as
 }
 
 void
+meta_kms_plane_assignment_set_color_pipeline (MetaKmsPlaneAssignment    *plane_assignment,
+                                              MetaKmsPlaneColorPipeline  pipeline)
+{
+  plane_assignment->color_pipeline.has_update = TRUE;
+  plane_assignment->color_pipeline.value = pipeline;
+}
+
+void
 meta_kms_plane_assignment_set_cursor_hotspot (MetaKmsPlaneAssignment *plane_assignment,
                                               int                     x,
                                               int                     y)

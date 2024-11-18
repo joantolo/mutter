@@ -203,6 +203,16 @@ meta_kms_plane_update_set_color_range (MetaKmsPlane                *plane,
   meta_kms_plane_assignment_set_color_range (plane_assignment, range);
 }
 
+void
+meta_kms_plane_update_set_color_pipeline (MetaKmsPlane              *plane,
+                                          MetaKmsPlaneAssignment    *plane_assignment,
+                                          MetaKmsPlaneColorPipeline  pipeline)
+{
+  g_return_if_fail (meta_kms_plane_is_color_pipeline_handled (plane, pipeline));
+
+  meta_kms_plane_assignment_set_color_pipeline (plane_assignment, pipeline);
+}
+
 gboolean
 meta_kms_plane_is_transform_handled (MetaKmsPlane        *plane,
                                      MtkMonitorTransform  transform)
@@ -253,6 +263,21 @@ meta_kms_plane_is_color_range_handled (MetaKmsPlane                *plane,
     &plane->prop_table.props[META_KMS_PLANE_PROP_YCBCR_COLOR_RANGE];
 
   return prop->supported_variants & (1 << range);
+}
+
+gboolean
+meta_kms_plane_is_color_pipeline_handled (MetaKmsPlane              *plane,
+                                          MetaKmsPlaneColorPipeline  pipeline)
+{
+  for (GList *l = plane->color_pipelines; l; l = l->next)
+    {
+      MetaKmsColorPipeline *color_pipeline = l->data;
+
+      if (meta_kms_color_pipeline_get_id (color_pipeline) == pipeline)
+        return TRUE;
+    }
+
+  return FALSE;
 }
 
 gboolean
@@ -317,6 +342,12 @@ meta_kms_plane_is_usable_with (MetaKmsPlane *plane,
                                MetaKmsCrtc  *crtc)
 {
   return !!(plane->possible_crtcs & (1 << meta_kms_crtc_get_idx (crtc)));
+}
+
+GList *
+meta_kms_plane_get_color_pipelines (MetaKmsPlane *plane)
+{
+  return plane->color_pipelines;
 }
 
 static inline uint32_t *
