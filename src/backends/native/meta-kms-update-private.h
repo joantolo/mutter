@@ -67,6 +67,11 @@ typedef struct _MetaKmsPlaneAssignment
 
   struct {
     gboolean has_update;
+    MetaKmsPlaneColorPipeline id;
+  } color_pipeline;
+
+  struct {
+    gboolean has_update;
     gboolean is_valid;
     int x;
     int y;

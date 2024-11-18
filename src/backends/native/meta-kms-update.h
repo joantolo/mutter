@@ -24,6 +24,7 @@
 
 #include "backends/meta-output.h"
 #include "backends/native/meta-drm-buffer.h"
+#include "backends/native/meta-kms-plane-private.h"
 #include "backends/native/meta-kms-types.h"
 #include "meta/boxes.h"
 #include "mtk/mtk.h"
@@ -197,6 +198,10 @@ META_EXPORT_TEST
 void meta_kms_plane_assignment_set_cursor_hotspot (MetaKmsPlaneAssignment *plane_assignment,
                                                    int                     x,
                                                    int                     y);
+
+META_EXPORT_TEST
+void meta_kms_plane_assignment_set_color_pipeline (MetaKmsPlaneAssignment    *plane_assignment,
+                                                   MetaKmsPlaneColorPipeline  color_pipeline);
 
 META_EXPORT_TEST
 void meta_kms_update_add_result_listener (MetaKmsUpdate                     *update,

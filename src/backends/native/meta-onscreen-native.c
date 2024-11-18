@@ -508,6 +508,23 @@ assign_primary_plane (MetaCrtcKms            *crtc_kms,
 }
 
 static void
+apply_color_pipeline (MetaKmsPlaneAssignment *plane_assignment,
+                      MetaRendererView       *renderer_view)
+{
+  ClutterColorState *out_color_state =
+    clutter_stage_view_get_output_color_state (CLUTTER_STAGE_VIEW (renderer_view));
+  ClutterColorState *color_state =
+    clutter_stage_view_get_color_state (CLUTTER_STAGE_VIEW (renderer_view));
+
+  // find when is fullscreen set, and set a color state to that kms plane
+
+  g_message ("JOAN: out color state %s", out_color_state ?
+           clutter_color_state_to_string (out_color_state): "nothing");
+  g_message ("JOAN: color state %s", color_state ?
+           clutter_color_state_to_string (color_state): "nothing");
+}
+
+static void
 meta_onscreen_native_flip_crtc (CoglOnscreen           *onscreen,
                                 MetaRendererView       *view,
                                 MetaCrtc               *crtc,
@@ -582,6 +599,13 @@ meta_onscreen_native_flip_crtc (CoglOnscreen           *onscreen,
           meta_kms_plane_assignment_set_fb_damage (plane_assignment,
                                                    rectangles, n_rectangles);
         }
+
+      //if (scanout)
+        {
+          apply_color_pipeline (plane_assignment, onscreen_native->view);
+          // Here add to kms_plane an
+        }
+
       break;
     case META_RENDERER_NATIVE_MODE_SURFACELESS:
       g_assert_not_reached ();

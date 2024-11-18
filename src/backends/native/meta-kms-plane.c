@@ -181,6 +181,31 @@ meta_kms_plane_update_set_rotation (MetaKmsPlane           *plane,
   meta_kms_plane_assignment_set_rotation (plane_assignment, kms_rotation);
 }
 
+void
+meta_kms_plane_update_set_color_pipeline (MetaKmsPlane           *plane,
+                                          MetaKmsPlaneAssignment *plane_assignment,
+                                          uint32_t                id)
+{
+  MetaKmsPlaneColorPipeline color_pipeline = -1;
+  MetaKmsProp *pipelines;
+  int i;
+
+  pipelines = &plane->prop_table.props[META_KMS_PLANE_PROP_COLOR_PIPELINE];
+  for (i = 0; i < pipelines->num_enum_values; i++)
+    {
+      if (pipelines->enum_values[i].valid &&
+          pipelines->enum_values[i].value == id)
+        {
+          color_pipeline = i;
+          break;
+        }
+    }
+
+  if (color_pipeline != -1)
+    meta_kms_plane_assignment_set_color_pipeline (plane_assignment,
+                                                  color_pipeline);
+}
+
 gboolean
 meta_kms_plane_is_transform_handled (MetaKmsPlane        *plane,
                                      MtkMonitorTransform  transform)

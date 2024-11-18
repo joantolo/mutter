@@ -670,6 +670,14 @@ meta_kms_plane_assignment_set_cursor_hotspot (MetaKmsPlaneAssignment *plane_assi
 }
 
 void
+meta_kms_plane_assignment_set_color_pipeline (MetaKmsPlaneAssignment    *plane_assignment,
+                                              MetaKmsPlaneColorPipeline  color_pipeline)
+{
+  plane_assignment->color_pipeline.has_update = TRUE;
+  plane_assignment->color_pipeline.id = color_pipeline;
+}
+
+void
 meta_kms_update_add_result_listener (MetaKmsUpdate                     *update,
                                      const MetaKmsResultListenerVtable *vtable,
                                      GMainContext                      *main_context,

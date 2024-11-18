@@ -77,4 +77,8 @@ void meta_kms_plane_update_set_rotation (MetaKmsPlane           *plane,
                                          MetaKmsPlaneAssignment *plane_assignment,
                                          MtkMonitorTransform     transform);
 
+void meta_kms_plane_update_set_color_pipeline (MetaKmsPlane           *plane,
+                                               MetaKmsPlaneAssignment *plane_assignment,
+                                               uint32_t                id);
+
 const char * meta_kms_plane_type_to_string (MetaKmsPlaneType plane_type);
