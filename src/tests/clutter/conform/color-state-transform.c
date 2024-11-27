@@ -25,6 +25,30 @@ static TestColor test_colors[] = {
 
 static const float actor_size = 10.0f;
 
+static ClutterColorState *
+create_icc_color_state (const char *icc_filename)
+{
+  ClutterContext *context = clutter_test_get_context ();
+  g_autofree char *icc_path = NULL;
+  g_autofd int srgb_icc_fd = -1;
+  struct stat stat = { 0 };
+
+  icc_path = g_build_filename (g_getenv ("TEST_DATADIR"),
+                               "icc-profiles",
+                               icc_filename,
+                               NULL);
+
+  g_assert_true (g_file_test (icc_path, G_FILE_TEST_EXISTS));
+
+  srgb_icc_fd = open (icc_path, O_RDONLY);
+  g_assert_cmpint (srgb_icc_fd, !=, -1);
+
+  fstat (srgb_icc_fd, &stat);
+  g_assert_cmpuint (stat.st_size, >, 0);
+
+  return clutter_color_state_icc_new (context, srgb_icc_fd, stat.st_size);
+}
+
 static GList *
 create_actors (ClutterActor *stage)
 {
@@ -185,6 +209,92 @@ validate_transform (ClutterActor      *stage,
 }
 
 static void
+color_state_transform_icc_to_params (void)
+{
+  ClutterContext *context = clutter_test_get_context ();
+  g_autoptr (ClutterColorState) src_color_state = NULL;
+  g_autoptr (ClutterColorState) target_color_state = NULL;
+  ClutterStageView *stage_view;
+  ClutterActor *stage;
+  GList *actors;
+
+  stage = clutter_test_get_stage ();
+
+  src_color_state = create_icc_color_state ("sRGB.icc");
+  actors = create_actors (stage);
+  actors_set_color_state (actors, src_color_state);
+
+  target_color_state =
+    clutter_color_state_params_new (context,
+                                    CLUTTER_COLORSPACE_BT2020,
+                                    CLUTTER_TRANSFER_FUNCTION_PQ);
+  stage_view = get_stage_view (stage);
+  stage_view_set_color_state (stage_view, target_color_state);
+
+  wait_for_paint (stage);
+
+  validate_transform (stage, src_color_state, target_color_state);
+
+  g_list_free_full (actors, (GDestroyNotify) clutter_actor_destroy);
+}
+
+static void
+color_state_transform_params_to_icc (void)
+{
+  ClutterContext *context = clutter_test_get_context ();
+  g_autoptr (ClutterColorState) src_color_state = NULL;
+  g_autoptr (ClutterColorState) target_color_state = NULL;
+  ClutterStageView *stage_view;
+  ClutterActor *stage;
+  GList *actors;
+
+  stage = clutter_test_get_stage ();
+
+  src_color_state =
+    clutter_color_state_params_new (context,
+                                    CLUTTER_COLORSPACE_SRGB,
+                                    CLUTTER_TRANSFER_FUNCTION_SRGB);
+  actors = create_actors (stage);
+  actors_set_color_state (actors, src_color_state);
+
+  target_color_state = create_icc_color_state ("sRGB.icc");
+  stage_view = get_stage_view (stage);
+  stage_view_set_color_state (stage_view, target_color_state);
+
+  wait_for_paint (stage);
+
+  validate_transform (stage, src_color_state, target_color_state);
+
+  g_list_free_full (actors, (GDestroyNotify) clutter_actor_destroy);
+}
+
+static void
+color_state_transform_icc_to_icc (void)
+{
+  g_autoptr (ClutterColorState) src_color_state = NULL;
+  g_autoptr (ClutterColorState) target_color_state = NULL;
+  ClutterStageView *stage_view;
+  ClutterActor *stage;
+  GList *actors;
+
+  stage = clutter_test_get_stage ();
+
+  src_color_state = create_icc_color_state ("sRGB.icc");
+  actors = create_actors (stage);
+  actors_set_color_state (actors, src_color_state);
+
+  target_color_state = create_icc_color_state ("vx239-calibrated.icc");
+  stage_view = get_stage_view (stage);
+  stage_view_set_color_state (stage_view, target_color_state);
+
+  wait_for_paint (stage);
+
+  validate_transform (stage, src_color_state, target_color_state);
+
+  g_list_free_full (actors, (GDestroyNotify) clutter_actor_destroy);
+}
+
+static void
 color_state_transform_params_to_params (void)
 {
   ClutterContext *context = clutter_test_get_context ();
@@ -218,5 +328,8 @@ color_state_transform_params_to_params (void)
 }
 
 CLUTTER_TEST_SUITE (
+  CLUTTER_TEST_UNIT ("/color-state-transform/icc-to-params", color_state_transform_icc_to_params)
+  CLUTTER_TEST_UNIT ("/color-state-transform/params-to-icc", color_state_transform_params_to_icc)
+  CLUTTER_TEST_UNIT ("/color-state-transform/icc-to-icc", color_state_transform_icc_to_icc)
   CLUTTER_TEST_UNIT ("/color-state-transform/params-to-params", color_state_transform_params_to_params)
 )
