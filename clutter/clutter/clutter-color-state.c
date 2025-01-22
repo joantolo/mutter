@@ -270,6 +270,28 @@ clutter_color_state_update_uniforms (ClutterColorState *color_state,
 }
 
 void
+clutter_color_state_do_transform (ClutterColorState *color_state,
+                                  ClutterColorState *target_color_state,
+                                  const float       *input,
+                                  uint8_t           *output,
+                                  CoglPixelFormat    output_format,
+                                  int                n_samples)
+{
+  ClutterColorStateClass *color_state_class =
+    CLUTTER_COLOR_STATE_GET_CLASS (color_state);
+
+  g_return_if_fail (CLUTTER_IS_COLOR_STATE (color_state));
+  g_return_if_fail (CLUTTER_IS_COLOR_STATE (target_color_state));
+
+  color_state_class->do_transform (color_state,
+                                   target_color_state,
+                                   input,
+                                   output,
+                                   output_format,
+                                   n_samples);
+}
+
+void
 clutter_color_state_add_pipeline_transform (ClutterColorState *color_state,
                                             ClutterColorState *target_color_state,
                                             CoglPipeline      *pipeline)
