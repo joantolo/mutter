@@ -28,6 +28,13 @@
 #include "backends/meta-cursor.h"
 #include "core/util-private.h"
 
+typedef enum _MetaCursorRendererUpdateFlags
+{
+  META_CURSOR_RENDERER_UPDATE_FLAG_NONE = 0,
+  META_CURSOR_RENDERER_UPDATE_FLAG_POSITION = 1 << 0,
+  META_CURSOR_RENDERER_UPDATE_FLAG_CURSOR = 1 << 1,
+} MetaCursorRendererUpdateFlags;
+
 #define META_TYPE_HW_CURSOR_INHIBITOR (meta_hw_cursor_inhibitor_get_type ())
 G_DECLARE_INTERFACE (MetaHwCursorInhibitor, meta_hw_cursor_inhibitor,
                      META, HW_CURSOR_INHIBITOR, GObject)
@@ -59,7 +66,9 @@ MetaCursorRenderer * meta_cursor_renderer_new (MetaBackend        *backend,
 void meta_cursor_renderer_set_cursor (MetaCursorRenderer *renderer,
                                       MetaCursorSprite   *cursor_sprite);
 
-void meta_cursor_renderer_update_position (MetaCursorRenderer *renderer);
+void meta_cursor_renderer_update (MetaCursorRenderer            *renderer,
+                                  MetaCursorRendererUpdateFlags  flags);
+
 void meta_cursor_renderer_force_update (MetaCursorRenderer *renderer);
 
 META_EXPORT_TEST

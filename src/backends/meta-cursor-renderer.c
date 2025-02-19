@@ -540,17 +540,24 @@ meta_cursor_renderer_force_update (MetaCursorRenderer *renderer)
 }
 
 void
-meta_cursor_renderer_update_position (MetaCursorRenderer *renderer)
+meta_cursor_renderer_update (MetaCursorRenderer            *renderer,
+                             MetaCursorRendererUpdateFlags  flags)
 {
   MetaCursorRendererPrivate *priv = meta_cursor_renderer_get_instance_private (renderer);
   graphene_point_t pos;
 
-  clutter_seat_query_state (clutter_input_device_get_seat (priv->device),
-                            priv->device, NULL, &pos, NULL);
-  priv->current_x = pos.x;
-  priv->current_y = pos.y;
+  if (flags & META_CURSOR_RENDERER_UPDATE_FLAG_POSITION)
+    {
+      clutter_seat_query_state (clutter_input_device_get_seat (priv->device),
+                                priv->device, NULL, &pos, NULL);
+      priv->current_x = pos.x;
+      priv->current_y = pos.y;
+    }
 
-  meta_cursor_renderer_update_cursor (renderer, priv->displayed_cursor);
+  if (flags & META_CURSOR_RENDERER_UPDATE_FLAG_CURSOR)
+    {
+      meta_cursor_renderer_update_cursor (renderer, priv->displayed_cursor);
+    }
 }
 
 MetaCursorSprite *

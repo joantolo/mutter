@@ -360,16 +360,21 @@ meta_display_handle_event (MetaDisplay        *display,
 
   if (event_type == CLUTTER_MOTION)
     {
-#ifdef HAVE_WAYLAND
-      if (wayland_compositor)
-        {
-          MetaCursorRenderer *cursor_renderer =
-            meta_backend_get_cursor_renderer_for_device (backend, device);
+      MetaCursorRenderer *cursor_renderer =
+        meta_backend_get_cursor_renderer_for_device (backend, device);
 
-          if (cursor_renderer)
-            meta_cursor_renderer_update_position (cursor_renderer);
-        }
+      if (cursor_renderer)
+        {
+          MetaCursorRendererUpdateFlags flags =
+            META_CURSOR_RENDERER_UPDATE_FLAG_POSITION;
+
+#ifdef HAVE_WAYLAND
+          if (wayland_compositor)
+            flags |= META_CURSOR_RENDERER_UPDATE_FLAG_CURSOR;
 #endif
+
+          meta_cursor_renderer_update (cursor_renderer, flags);
+        }
 
       if (device == clutter_seat_get_pointer (clutter_input_device_get_seat (device)))
         {
