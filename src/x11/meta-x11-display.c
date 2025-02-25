@@ -2133,6 +2133,8 @@ create_guard_window (MetaX11Display *x11_display)
       XISetMask (mask.mask, XI_ButtonPress);
       XISetMask (mask.mask, XI_ButtonRelease);
       XISetMask (mask.mask, XI_Motion);
+      XISetMask (mask.mask, XI_Enter);
+      XISetMask (mask.mask, XI_Leave);
 
       /* Sync on the connection we created the window on to
         * make sure it's created before we select on it on the
