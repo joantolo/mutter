@@ -33,6 +33,8 @@
 
 #include "color-management-v1-server-protocol.h"
 
+static GQuark image_desc_id_quark = 0;
+
 struct _MetaWaylandColorManager
 {
   GObject parent;
@@ -40,6 +42,13 @@ struct _MetaWaylandColorManager
   MetaWaylandCompositor *compositor;
 
   gulong color_state_changed_handler_id;
+
+  struct
+  {
+    GQueue *to_reuse;
+    GHashTable *in_use;
+    uint32_t next_id;
+  } ids;
 
   /* struct wl_resource */
   GList *resources;
@@ -334,6 +343,59 @@ meta_wayland_image_description_new_failed (MetaWaylandColorManager            *c
   return image_desc;
 }
 
+static gint
+compare_ids (gconstpointer id_a,
+             gconstpointer id_b,
+             gpointer      user_data)
+{
+  return GPOINTER_TO_INT (id_a) - GPOINTER_TO_INT (id_b);
+}
+
+static void
+on_color_state_destroyed (ClutterColorState       *color_state,
+                          MetaWaylandColorManager *color_manager)
+{
+  uint32_t id = GPOINTER_TO_UINT (g_object_get_qdata (G_OBJECT (color_state),
+                                                      image_desc_id_quark));
+
+  g_assert (g_hash_table_remove (color_manager->ids.in_use,
+                                 GUINT_TO_POINTER (id)));
+
+  g_queue_insert_sorted (color_manager->ids.to_reuse,
+                         GUINT_TO_POINTER (id),
+                         compare_ids, NULL);
+}
+
+static uint32_t
+get_image_description_id (ClutterColorState       *color_state,
+                          MetaWaylandColorManager *color_manager)
+{
+  uint32_t id = GPOINTER_TO_UINT (g_object_get_qdata (G_OBJECT (color_state),
+                                                      image_desc_id_quark));
+  if (id != 0)
+    return id;
+
+  if (!g_queue_is_empty (color_manager->ids.to_reuse))
+    id = GPOINTER_TO_UINT (g_queue_pop_head (color_manager->ids.to_reuse));
+  else
+    id = ++color_manager->ids.next_id;
+
+  g_assert (g_hash_table_insert (color_manager->ids.in_use,
+                                 GUINT_TO_POINTER (id),
+                                 NULL));
+
+  g_object_set_qdata (G_OBJECT (color_state),
+                      image_desc_id_quark,
+                      GUINT_TO_POINTER (id));
+
+  g_signal_connect_object (G_OBJECT (color_state),
+                           "destroyed",
+                           G_CALLBACK (on_color_state_destroyed),
+                           color_manager, G_CONNECT_DEFAULT);
+
+  return id;
+}
+
 static MetaWaylandImageDescription *
 meta_wayland_image_description_new_color_state (MetaWaylandColorManager          *color_manager,
                                                 struct wl_resource               *resource,
@@ -347,7 +409,8 @@ meta_wayland_image_description_new_color_state (MetaWaylandColorManager         
   image_desc->has_info = !!(flags & META_WAYLAND_IMAGE_DESCRIPTION_FLAGS_ALLOW_INFO);
   image_desc->color_state = g_object_ref (color_state);
   wp_image_description_v1_send_ready (resource,
-                                      clutter_color_state_get_id (color_state));
+                                      get_image_description_id (color_state,
+                                                                color_manager));
 
   return image_desc;
 }
@@ -505,6 +568,7 @@ update_preferred_color_state (MetaWaylandColorManagementSurface *cm_surface)
   ClutterColorState *color_state = NULL;
   GList *l;
   gboolean initial = !cm_surface->preferred_color_state;
+  uint32_t identity;
 
   g_return_if_fail (surface != NULL);
 
@@ -537,12 +601,14 @@ update_preferred_color_state (MetaWaylandColorManagementSurface *cm_surface)
   if (initial)
     return;
 
+  identity = get_image_description_id (color_state, color_manager);
+
   for (l = cm_surface->feedback_resources; l; l = l->next)
     {
       struct wl_resource *resource = l->data;
 
       wp_color_management_surface_feedback_v1_send_preferred_changed (resource,
-                                                                      clutter_color_state_get_id (color_state));
+                                                                      identity);
     }
 }
 
@@ -1571,6 +1637,9 @@ meta_wayland_color_manager_dispose (GObject *object)
 
   g_clear_pointer (&color_manager->outputs, g_hash_table_destroy);
   g_clear_pointer (&color_manager->surfaces, g_hash_table_destroy);
+
+  g_clear_pointer (&color_manager->ids.in_use, g_hash_table_unref);
+  g_clear_pointer (&color_manager->ids.to_reuse, g_queue_free);
 }
 
 static void
@@ -1578,6 +1647,9 @@ meta_wayland_color_manager_init (MetaWaylandColorManager *color_manager)
 {
   color_manager->outputs = g_hash_table_new (NULL, NULL);
   color_manager->surfaces = g_hash_table_new (NULL, NULL);
+
+  color_manager->ids.in_use = g_hash_table_new (NULL, NULL);
+  color_manager->ids.to_reuse = g_queue_new ();
 }
 
 static void
@@ -1586,6 +1658,8 @@ meta_wayland_color_manager_class_init (MetaWaylandColorManagerClass *klass)
   GObjectClass *object_class = G_OBJECT_CLASS (klass);
 
   object_class->dispose = meta_wayland_color_manager_dispose;
+
+  image_desc_id_quark = g_quark_from_static_string ("-image-desc-id");
 }
 
 static MetaWaylandColorManager *

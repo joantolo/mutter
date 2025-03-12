@@ -60,13 +60,22 @@ enum
   N_PROPS
 };
 
+enum
+{
+  DESTROYED,
+
+  N_SIGNALS,
+};
+
 static GParamSpec *obj_props[N_PROPS];
+
+static guint signals[N_SIGNALS];
 
 typedef struct _ClutterColorStatePrivate
 {
   ClutterContext *context;
 
-  unsigned int id;
+  uint64_t id;
 } ClutterColorStatePrivate;
 
 G_DEFINE_TYPE_WITH_PRIVATE (ClutterColorState,
@@ -113,7 +122,7 @@ clutter_color_transform_key_init (ClutterColorTransformKey *key,
                                                key);
 }
 
-unsigned int
+uint64_t
 clutter_color_state_get_id (ClutterColorState *color_state)
 {
   ClutterColorStatePrivate *priv;
@@ -138,6 +147,16 @@ clutter_color_state_constructed (GObject *object)
   color_manager = clutter_context_get_color_manager (priv->context);
 
   priv->id = clutter_color_manager_get_next_id (color_manager);
+}
+
+static void
+clutter_color_state_dispose (GObject *object)
+{
+  ClutterColorState *color_state = CLUTTER_COLOR_STATE (object);
+
+  g_signal_emit (color_state, signals[DESTROYED], 0);
+
+  G_OBJECT_CLASS (clutter_color_state_parent_class)->dispose (object);
 }
 
 static void
@@ -191,6 +210,7 @@ clutter_color_state_class_init (ClutterColorStateClass *klass)
   GObjectClass *object_class = G_OBJECT_CLASS (klass);
 
   object_class->constructed = clutter_color_state_constructed;
+  object_class->dispose = clutter_color_state_dispose;
   object_class->set_property = clutter_color_state_set_property;
   object_class->get_property = clutter_color_state_get_property;
 
@@ -206,6 +226,13 @@ clutter_color_state_class_init (ClutterColorStateClass *klass)
                                                  G_PARAM_CONSTRUCT_ONLY);
 
   g_object_class_install_properties (object_class, N_PROPS, obj_props);
+
+  signals[DESTROYED] = g_signal_new ("destroyed",
+                                     G_TYPE_FROM_CLASS (klass),
+                                     G_SIGNAL_RUN_LAST,
+                                     0,
+                                     NULL, NULL, NULL,
+                                     G_TYPE_NONE, 0);
 }
 
 static void
