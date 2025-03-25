@@ -297,6 +297,7 @@ ensure_stage_view_offscreen_pipeline (ClutterStageView *view)
     clutter_stage_view_get_instance_private (view);
   CoglFramebuffer *framebuffer = COGL_FRAMEBUFFER (priv->offscreen);
   g_autoptr (CoglPipeline) pipeline = NULL;
+  g_autoptr (CoglSnippet) vertex_snippet = NULL;
 
   if (priv->offscreen_pipeline)
     return;
@@ -319,6 +320,9 @@ ensure_stage_view_offscreen_pipeline (ClutterStageView *view)
       clutter_stage_view_get_offscreen_transformation_matrix (view, &matrix);
       cogl_pipeline_set_layer_matrix (pipeline, 0, &matrix);
     }
+
+  vertex_snippet = cogl_snippet_new (COGL_SNIPPET_HOOK_VERTEX, NULL, NULL);
+  cogl_pipeline_add_snippet (pipeline, vertex_snippet);
 
   clutter_color_state_add_pipeline_transform (priv->color_state,
                                               priv->output_color_state,
