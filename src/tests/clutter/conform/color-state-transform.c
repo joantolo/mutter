@@ -123,11 +123,16 @@ validate_transform (ClutterActor      *stage,
 {
   ClutterStageView *view = get_stage_view (stage);
   CoglFramebuffer *fb = clutter_stage_view_get_onscreen (view);
+  g_autoptr (ClutterColorState) blending_color_state = NULL;
   float in_color[3];
   float cpu_color[4];
+  float blending_color[4];
   float shader_color[4];
   int x, y;
   gboolean transform_passed;
+
+  blending_color_state = clutter_color_state_get_blending (target_color_state,
+                                                           FALSE);
 
   for (int i = 0; i < G_N_ELEMENTS (test_colors); i++)
     {
@@ -136,8 +141,14 @@ validate_transform (ClutterActor      *stage,
       in_color[2] = test_colors[i].b;
 
       clutter_color_state_do_transform (src_color_state,
-                                        target_color_state,
+                                        blending_color_state,
                                         in_color,
+                                        blending_color,
+                                        1);
+
+      clutter_color_state_do_transform (blending_color_state,
+                                        target_color_state,
+                                        blending_color,
                                         cpu_color,
                                         1);
 
