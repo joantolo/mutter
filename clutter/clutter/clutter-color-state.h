@@ -32,6 +32,12 @@
 
 G_BEGIN_DECLS
 
+typedef struct _ClutterColorOpSnippet
+{
+  const char *source;
+  const char *name;
+} ClutterColorOpSnippet;
+
 #define CLUTTER_TYPE_COLOR_STATE (clutter_color_state_get_type ())
 CLUTTER_EXPORT
 G_DECLARE_DERIVABLE_TYPE (ClutterColorState,
@@ -47,8 +53,11 @@ struct _ClutterColorStateClass
                                      ClutterColorState        *target_color_state,
                                      ClutterColorTransformKey *key);
 
-  CoglSnippet * (* create_transform_snippet) (ClutterColorState *color_state,
-                                              ClutterColorState *target_color_state);
+  void (* append_transform_snippet) (ClutterColorState *color_state,
+                                     ClutterColorState *target_color_state,
+                                     GString           *snippet_globals,
+                                     GString           *snippet_source,
+                                     const char        *snippet_color_var);
 
   void (* update_uniforms) (ClutterColorState *color_state,
                             ClutterColorState *target_color_state,
@@ -104,5 +113,11 @@ ClutterEncodingRequiredFormat clutter_color_state_required_format (ClutterColorS
 CLUTTER_EXPORT
 ClutterColorState * clutter_color_state_get_blending (ClutterColorState *color_state,
                                                       gboolean           force);
+
+CLUTTER_EXPORT
+void clutter_color_op_snippet_append (const ClutterColorOpSnippet *color_snippet,
+                                      GString                     *snippet_globals,
+                                      GString                     *snippet_source,
+                                      const char                  *snippet_color_var);
 
 G_END_DECLS
