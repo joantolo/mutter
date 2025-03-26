@@ -44,3 +44,8 @@ guint clutter_color_transform_key_hash (gconstpointer data);
 
 gboolean clutter_color_transform_key_equal (gconstpointer data1,
                                             gconstpointer data2);
+
+void clutter_color_op_snippet_append (const ClutterColorOpSnippet *color_snippet,
+                                      GString                     *snippet_globals,
+                                      GString                     *snippet_source,
+                                      const char                  *snippet_color_var);
