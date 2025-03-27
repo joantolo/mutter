@@ -787,16 +787,6 @@ get_inv_eotf_snippet (ClutterColorStateParams *color_state_params)
   return NULL;
 }
 
-static void
-get_eotf_snippets (ClutterColorStateParams  *color_state_params,
-                   ClutterColorStateParams  *target_color_state_params,
-                   const ColorOpSnippet    **eotf_snippet,
-                   const ColorOpSnippet    **inv_eotf_snippet)
-{
-  *eotf_snippet = get_eotf_snippet (color_state_params);
-  *inv_eotf_snippet = get_inv_eotf_snippet (target_color_state_params);
-}
-
 static const char luminance_mapping_source[] =
   "uniform float " UNIFORM_NAME_LUMINANCE_MAPPING ";\n"
   "// luminance_mapping:\n"
@@ -817,18 +807,6 @@ static const ColorOpSnippet luminance_mapping = {
   .name = "luminance_mapping",
 };
 
-static void
-get_luminance_mapping_snippet (ClutterColorStateParams  *color_state_params,
-                               ClutterColorStateParams  *target_color_state_params,
-                               const ColorOpSnippet    **luminance_mapping_snippet)
-{
-  if (clutter_color_state_params_luminance_equal (color_state_params,
-                                                  target_color_state_params))
-    return;
-
-  *luminance_mapping_snippet = &luminance_mapping;
-}
-
 static const char color_space_mapping_source[] =
   "uniform mat3 " UNIFORM_NAME_COLOR_SPACE_MAPPING ";\n"
   "// color_space_mapping:\n"
@@ -848,18 +826,6 @@ static const ColorOpSnippet color_space_mapping = {
   .source = color_space_mapping_source,
   .name = "color_space_mapping",
 };
-
-static void
-get_color_space_mapping_snippet (ClutterColorStateParams  *color_state_params,
-                                 ClutterColorStateParams  *target_color_state_params,
-                                 const ColorOpSnippet    **color_space_mapping_snippet)
-{
-  if (clutter_color_state_params_colorimetry_equal (color_state_params,
-                                                    target_color_state_params))
-    return;
-
-  *color_space_mapping_snippet = &color_space_mapping;
-}
 
 static void
 append_color_op_snippet (const ColorOpSnippet *color_snippet,
@@ -886,29 +852,18 @@ clutter_color_state_params_create_transform_snippet (ClutterColorState *color_st
   const char *snippet_color_var;
   g_autoptr (GString) snippet_globals = NULL;
   g_autoptr (GString) snippet_source = NULL;
-  const ColorOpSnippet *eotf_snippet = NULL;
-  const ColorOpSnippet *inv_eotf_snippet = NULL;
-  const ColorOpSnippet *color_space_mapping_snippet = NULL;
-  const ColorOpSnippet *luminance_mapping_snippet = NULL;
   ClutterColorStateParams *color_state_params =
     CLUTTER_COLOR_STATE_PARAMS (color_state);
   ClutterColorStateParams *target_color_state_params =
     CLUTTER_COLOR_STATE_PARAMS (target_color_state);
+  const ColorOpSnippet *eotf =
+    get_eotf_snippet (color_state_params);
+  const ColorOpSnippet *inv_eotf =
+    get_inv_eotf_snippet (target_color_state_params);
 
   snippet_globals = g_string_new (NULL);
   snippet_source = g_string_new (NULL);
   snippet_color_var = "color_state_color";
-
-  get_eotf_snippets (color_state_params,
-                     target_color_state_params,
-                     &eotf_snippet,
-                     &inv_eotf_snippet);
-  get_luminance_mapping_snippet (color_state_params,
-                                 target_color_state_params,
-                                 &luminance_mapping_snippet);
-  get_color_space_mapping_snippet (color_state_params,
-                                   target_color_state_params,
-                                   &color_space_mapping_snippet);
 
   /*
    * The following statements generate a shader snippet that transforms colors
@@ -936,22 +891,30 @@ clutter_color_state_params_create_transform_snippet (ClutterColorState *color_st
                           "  vec3 %s = cogl_color_out.rgb;\n",
                           snippet_color_var);
 
-  append_color_op_snippet (eotf_snippet,
+  append_color_op_snippet (eotf,
                            snippet_globals,
                            snippet_source,
                            snippet_color_var);
 
-  append_color_op_snippet (luminance_mapping_snippet,
-                           snippet_globals,
-                           snippet_source,
-                           snippet_color_var);
+  if (!clutter_color_state_params_luminance_equal (color_state_params,
+                                                   target_color_state_params))
+    {
+      append_color_op_snippet (&luminance_mapping,
+                               snippet_globals,
+                               snippet_source,
+                               snippet_color_var);
+    }
 
-  append_color_op_snippet (color_space_mapping_snippet,
-                           snippet_globals,
-                           snippet_source,
-                           snippet_color_var);
+  if (!clutter_color_state_params_colorimetry_equal (color_state_params,
+                                                     target_color_state_params))
+    {
+      append_color_op_snippet (&color_space_mapping,
+                               snippet_globals,
+                               snippet_source,
+                               snippet_color_var);
+    }
 
-  append_color_op_snippet (inv_eotf_snippet,
+  append_color_op_snippet (inv_eotf,
                            snippet_globals,
                            snippet_source,
                            snippet_color_var);
@@ -1283,29 +1246,10 @@ update_inv_eotf_uniforms (ClutterColorStateParams *color_state_params,
 }
 
 static void
-update_eotfs_uniforms (ClutterColorStateParams *color_state_params,
-                       ClutterColorStateParams *target_color_state_params,
-                       CoglPipeline            *pipeline)
+update_luminance_mapping_uniforms (float         lum_mapping,
+                                   CoglPipeline *pipeline)
 {
-  update_eotf_uniforms (color_state_params, pipeline);
-  update_inv_eotf_uniforms (target_color_state_params, pipeline);
-}
-
-static void
-update_luminance_mapping_uniforms (ClutterColorStateParams *color_state_params,
-                                   ClutterColorStateParams *target_color_state_params,
-                                   CoglPipeline            *pipeline)
-{
-  float lum_mapping;
   int uniform_location_luminance_mapping;
-
-  if (clutter_color_state_params_luminance_equal (color_state_params,
-                                                  target_color_state_params))
-    return;
-
-  clutter_color_state_params_get_luminance_mapping (color_state_params,
-                                                    target_color_state_params,
-                                                    &lum_mapping);
 
   uniform_location_luminance_mapping =
     cogl_pipeline_get_uniform_location (pipeline,
@@ -1317,20 +1261,10 @@ update_luminance_mapping_uniforms (ClutterColorStateParams *color_state_params,
 }
 
 static void
-update_color_space_mapping_uniforms (ClutterColorStateParams *color_state_params,
-                                     ClutterColorStateParams *target_color_state_params,
-                                     CoglPipeline            *pipeline)
+update_color_space_mapping_uniforms (float         color_space_mapping_matrix[9],
+                                     CoglPipeline *pipeline)
 {
-  float color_space_mapping_matrix[9] = { 0 };
   int uniform_location_color_space_mapping;
-
-  if (clutter_color_state_params_colorimetry_equal (color_state_params,
-                                                    target_color_state_params))
-    return;
-
-  clutter_color_state_params_get_color_space_mapping (color_state_params,
-                                                      target_color_state_params,
-                                                      color_space_mapping_matrix);
 
   uniform_location_color_space_mapping =
     cogl_pipeline_get_uniform_location (pipeline,
@@ -1353,18 +1287,31 @@ clutter_color_state_params_update_uniforms (ClutterColorState *color_state,
     CLUTTER_COLOR_STATE_PARAMS (color_state);
   ClutterColorStateParams *target_color_state_params =
     CLUTTER_COLOR_STATE_PARAMS (target_color_state);
+  float color_space_mapping_matrix[9];
+  float lum_mapping;
 
-  update_eotfs_uniforms (color_state_params,
-                         target_color_state_params,
-                         pipeline);
+  update_eotf_uniforms (color_state_params, pipeline);
 
-  update_luminance_mapping_uniforms (color_state_params,
-                                     target_color_state_params,
-                                     pipeline);
+  if (!clutter_color_state_params_luminance_equal (color_state_params,
+                                                   target_color_state_params))
+    {
+      clutter_color_state_params_get_luminance_mapping (color_state_params,
+                                                        target_color_state_params,
+                                                        &lum_mapping);
+      update_luminance_mapping_uniforms (lum_mapping, pipeline);
+    }
 
-  update_color_space_mapping_uniforms (color_state_params,
-                                       target_color_state_params,
-                                       pipeline);
+  if (!clutter_color_state_params_colorimetry_equal (color_state_params,
+                                                     target_color_state_params))
+    {
+      clutter_color_state_params_get_color_space_mapping (color_state_params,
+                                                          target_color_state_params,
+                                                          color_space_mapping_matrix);
+      update_color_space_mapping_uniforms (color_space_mapping_matrix,
+                                           pipeline);
+    }
+
+  update_inv_eotf_uniforms (target_color_state_params, pipeline);
 }
 
 static void
