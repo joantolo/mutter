@@ -888,6 +888,70 @@ clutter_color_state_params_append_transform_snippet (ClutterColorState *color_st
 }
 
 static void
+clutter_color_state_params_append_transform_snippet_to_XYZ (ClutterColorState *color_state,
+                                                            GString           *snippet_globals,
+                                                            GString           *snippet_source,
+                                                            const char        *snippet_color_var)
+{
+  ClutterColorStateParams *color_state_params =
+    CLUTTER_COLOR_STATE_PARAMS (color_state);
+  const ClutterColorOpSnippet *eotf_snippet =
+    get_eotf_snippet (color_state_params);
+  const ClutterLuminance *lum =
+    clutter_color_state_params_get_luminance (color_state_params);
+
+  clutter_color_op_snippet_append (eotf_snippet,
+                                   snippet_globals,
+                                   snippet_source,
+                                   snippet_color_var);
+
+  if (!clutter_luminance_equal (lum, &sdr_default_luminance))
+    {
+      clutter_color_op_snippet_append (&luminance_mapping,
+                                       snippet_globals,
+                                       snippet_source,
+                                       snippet_color_var);
+    }
+
+  clutter_color_op_snippet_append (&color_space_mapping,
+                                   snippet_globals,
+                                   snippet_source,
+                                   snippet_color_var);
+}
+
+static void
+clutter_color_state_params_append_transform_snippet_from_XYZ (ClutterColorState *color_state,
+                                                              GString           *snippet_globals,
+                                                              GString           *snippet_source,
+                                                              const char        *snippet_color_var)
+{
+  ClutterColorStateParams *color_state_params =
+    CLUTTER_COLOR_STATE_PARAMS (color_state);
+  const ClutterColorOpSnippet *inv_eotf_snippet =
+    get_inv_eotf_snippet (color_state_params);
+  const ClutterLuminance *lum =
+    clutter_color_state_params_get_luminance (color_state_params);
+
+  clutter_color_op_snippet_append (&color_space_mapping,
+                                   snippet_globals,
+                                   snippet_source,
+                                   snippet_color_var);
+
+  if (!clutter_luminance_equal (lum, &sdr_default_luminance))
+    {
+      clutter_color_op_snippet_append (&luminance_mapping,
+                                       snippet_globals,
+                                       snippet_source,
+                                       snippet_color_var);
+    }
+
+  clutter_color_op_snippet_append (inv_eotf_snippet,
+                                   snippet_globals,
+                                   snippet_source,
+                                   snippet_color_var);
+}
+
+static void
 clutter_luminance_get_luminance_mapping (const ClutterLuminance *lum,
                                          const ClutterLuminance *target_lum,
                                          float                  *lum_mapping)
@@ -1270,6 +1334,26 @@ clutter_color_state_params_update_uniforms (ClutterColorState *color_state,
 }
 
 static void
+clutter_color_state_params_update_uniforms_to_XYZ (ClutterColorState *color_state,
+                                                   CoglPipeline      *pipeline)
+{
+  ClutterColorStateParams *color_state_params =
+    CLUTTER_COLOR_STATE_PARAMS (color_state);
+
+  update_eotf_uniforms (color_state_params, pipeline);
+}
+
+static void
+clutter_color_state_params_update_uniforms_from_XYZ (ClutterColorState *color_state,
+                                                     CoglPipeline      *pipeline)
+{
+  ClutterColorStateParams *color_state_params =
+    CLUTTER_COLOR_STATE_PARAMS (color_state);
+
+  update_inv_eotf_uniforms (color_state_params, pipeline);
+}
+
+static void
 clutter_color_state_params_do_transform (ClutterColorState *color_state,
                                          ClutterColorState *target_color_state,
                                          const float       *input,
@@ -1471,7 +1555,11 @@ clutter_color_state_params_class_init (ClutterColorStateParamsClass *klass)
 
   color_state_class->init_color_transform_key = clutter_color_state_params_init_color_transform_key;
   color_state_class->append_transform_snippet = clutter_color_state_params_append_transform_snippet;
+  color_state_class->append_transform_snippet_to_XYZ = clutter_color_state_params_append_transform_snippet_to_XYZ;
+  color_state_class->append_transform_snippet_from_XYZ = clutter_color_state_params_append_transform_snippet_from_XYZ;
   color_state_class->update_uniforms = clutter_color_state_params_update_uniforms;
+  color_state_class->update_uniforms_to_XYZ = clutter_color_state_params_update_uniforms_to_XYZ;
+  color_state_class->update_uniforms_from_XYZ = clutter_color_state_params_update_uniforms_from_XYZ;
   color_state_class->do_transform = clutter_color_state_params_do_transform;
   color_state_class->equals = clutter_color_state_params_equals;
   color_state_class->to_string = clutter_color_state_params_to_string;

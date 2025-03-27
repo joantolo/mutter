@@ -223,6 +223,25 @@ clutter_color_state_append_transform_snippet (ClutterColorState *color_state,
 {
   ClutterColorStateClass *color_state_class =
     CLUTTER_COLOR_STATE_GET_CLASS (color_state);
+  ClutterColorStateClass *target_color_state_class =
+    CLUTTER_COLOR_STATE_GET_CLASS (target_color_state);
+
+  if (G_OBJECT_TYPE (color_state) != G_OBJECT_TYPE (target_color_state))
+    {
+      color_state_class->append_transform_snippet_to_XYZ (
+        color_state,
+        snippet_globals,
+        snippet_source,
+        snippet_color_var);
+
+      target_color_state_class->append_transform_snippet_from_XYZ (
+        target_color_state,
+        snippet_globals,
+        snippet_source,
+        snippet_color_var);
+
+      return;
+    }
 
   color_state_class->append_transform_snippet (color_state,
                                                target_color_state,
@@ -303,9 +322,20 @@ clutter_color_state_update_uniforms (ClutterColorState *color_state,
 {
   ClutterColorStateClass *color_state_class =
     CLUTTER_COLOR_STATE_GET_CLASS (color_state);
+  ClutterColorStateClass *target_color_state_class =
+    CLUTTER_COLOR_STATE_GET_CLASS (target_color_state);
 
   g_return_if_fail (CLUTTER_IS_COLOR_STATE (color_state));
   g_return_if_fail (CLUTTER_IS_COLOR_STATE (target_color_state));
+
+  if (G_OBJECT_TYPE (color_state) != G_OBJECT_TYPE (target_color_state))
+    {
+      color_state_class->update_uniforms_to_XYZ (color_state,
+                                                 pipeline);
+      target_color_state_class->update_uniforms_from_XYZ (target_color_state,
+                                                          pipeline);
+      return;
+    }
 
   color_state_class->update_uniforms (color_state,
                                       target_color_state,

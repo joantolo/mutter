@@ -59,9 +59,25 @@ struct _ClutterColorStateClass
                                      GString           *snippet_source,
                                      const char        *snippet_color_var);
 
+  void (* append_transform_snippet_to_XYZ) (ClutterColorState *color_state,
+                                            GString           *snippet_globals,
+                                            GString           *snippet_source,
+                                            const char        *snippet_color_var);
+
+  void (* append_transform_snippet_from_XYZ) (ClutterColorState *color_state,
+                                              GString           *snippet_globals,
+                                              GString           *snippet_source,
+                                              const char        *snippet_color_var);
+
   void (* update_uniforms) (ClutterColorState *color_state,
                             ClutterColorState *target_color_state,
                             CoglPipeline      *pipeline);
+
+  void (* update_uniforms_to_XYZ) (ClutterColorState *color_state,
+                                   CoglPipeline      *pipeline);
+
+  void (* update_uniforms_from_XYZ) (ClutterColorState *color_state,
+                                     CoglPipeline      *pipeline);
 
   void (* do_transform) (ClutterColorState *color_state,
                          ClutterColorState *target_color_state,
