@@ -137,6 +137,28 @@ update_scanout_candidate (MetaCompositorViewNative *view_native,
     }
 }
 
+static void
+update_scanout_color_state (MetaCompositorViewNative *view_native,
+                            MetaWaylandSurface       *surface)
+{
+  MetaCompositorView *compositor_view = META_COMPOSITOR_VIEW (view_native);
+  ClutterStageView *stage_view =
+    meta_compositor_view_get_stage_view (compositor_view);
+  ClutterColorState *color_state = NULL;
+  MetaSurfaceActor *surface_actor;
+
+  if (surface)
+    {
+      surface_actor = meta_wayland_surface_get_actor (surface);
+
+      if (surface_actor)
+        color_state =
+          clutter_actor_get_color_state (CLUTTER_ACTOR (surface_actor));
+    }
+
+  clutter_stage_view_set_scanout_color_state (stage_view, color_state);
+}
+
 static gboolean
 find_scanout_candidate (MetaCompositorView  *compositor_view,
                         MetaCompositor      *compositor,
@@ -357,6 +379,7 @@ meta_compositor_view_native_maybe_assign_scanout (MetaCompositorViewNative *view
     }
 
   update_scanout_candidate (view_native, surface, crtc);
+  update_scanout_color_state (view_native, surface);
 }
 #endif /* HAVE_WAYLAND */
 

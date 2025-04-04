@@ -90,4 +90,7 @@ CLUTTER_EXPORT
 ClutterColorState * clutter_stage_view_get_output_color_state (ClutterStageView *view);
 
 CLUTTER_EXPORT
+ClutterColorState * clutter_stage_view_get_scanout_color_state (ClutterStageView *view);
+
+CLUTTER_EXPORT
 MtkMonitorTransform clutter_stage_view_get_transform (ClutterStageView *view);

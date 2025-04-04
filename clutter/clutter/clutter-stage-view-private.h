@@ -84,4 +84,8 @@ void clutter_stage_view_set_output_color_state (ClutterStageView  *view,
                                                 ClutterColorState *color_state);
 
 CLUTTER_EXPORT
+void clutter_stage_view_set_scanout_color_state (ClutterStageView  *view,
+                                                 ClutterColorState *color_state);
+
+CLUTTER_EXPORT
 const char * clutter_stage_view_get_name (ClutterStageView *view);

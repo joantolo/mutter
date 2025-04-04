@@ -73,6 +73,7 @@ typedef struct _ClutterStageViewPrivate
   CoglFramebuffer *framebuffer;
   ClutterColorState *color_state;
   ClutterColorState *output_color_state;
+  ClutterColorState *scanout_color_state;
 
   guint ensure_offscreen_idle_id;
   CoglOffscreen *offscreen;
@@ -411,6 +412,16 @@ clutter_stage_view_set_output_color_state (ClutterStageView  *view,
                    obj_props[PROP_OUTPUT_COLOR_STATE],
                    &priv->output_color_state,
                    color_state);
+}
+
+void
+clutter_stage_view_set_scanout_color_state (ClutterStageView  *view,
+                                            ClutterColorState *color_state)
+{
+  ClutterStageViewPrivate *priv =
+    clutter_stage_view_get_instance_private (view);
+
+  g_set_object (&priv->scanout_color_state, color_state);
 }
 
 static void
@@ -1363,6 +1374,7 @@ clutter_stage_view_dispose (GObject *object)
   g_clear_object (&priv->offscreen);
   g_clear_object (&priv->offscreen_pipeline);
   g_clear_object (&priv->output_color_state);
+  g_clear_object (&priv->scanout_color_state);
   g_clear_pointer (&priv->redraw_clip, mtk_region_unref);
   g_clear_pointer (&priv->accumulated_redraw_clip, mtk_region_unref);
   g_clear_pointer (&priv->frame_clock, clutter_frame_clock_destroy);
@@ -1541,6 +1553,18 @@ clutter_stage_view_get_output_color_state (ClutterStageView *view)
     clutter_stage_view_get_instance_private (view);
 
   return priv->output_color_state;
+}
+
+/**
+ * clutter_stage_view_get_scanout_color_state: (skip)
+ */
+ClutterColorState *
+clutter_stage_view_get_scanout_color_state (ClutterStageView *view)
+{
+  ClutterStageViewPrivate *priv =
+    clutter_stage_view_get_instance_private (view);
+
+  return priv->scanout_color_state;
 }
 
 const char *
