@@ -1378,8 +1378,7 @@ clutter_color_state_params_update_uniforms (ClutterColorState *color_state,
 static void
 clutter_color_state_params_do_transform (ClutterColorState *color_state,
                                          ClutterColorState *target_color_state,
-                                         const float       *input,
-                                         float             *output,
+                                         float             *data,
                                          int                n_samples)
 {
   ClutterColorStateParams *color_state_params =
@@ -1405,9 +1404,9 @@ clutter_color_state_params_do_transform (ClutterColorState *color_state,
   for (i = 0; i < n_samples; i++)
     {
       /* EOTF */
-      result[0] = clutter_eotf_apply (eotf, input[0]);
-      result[1] = clutter_eotf_apply (eotf, input[1]);
-      result[2] = clutter_eotf_apply (eotf, input[2]);
+      result[0] = clutter_eotf_apply (eotf, data[0]);
+      result[1] = clutter_eotf_apply (eotf, data[1]);
+      result[2] = clutter_eotf_apply (eotf, data[2]);
       result[3] = 1.0f;
 
       /* Luminance mapping */
@@ -1425,12 +1424,11 @@ clutter_color_state_params_do_transform (ClutterColorState *color_state,
       result[1] = clutter_eotf_apply_inv (target_eotf, result[1]);
       result[2] = clutter_eotf_apply_inv (target_eotf, result[2]);
 
-      output[0] = CLAMP (result[0], 0.0f, 1.0f);
-      output[1] = CLAMP (result[1], 0.0f, 1.0f);
-      output[2] = CLAMP (result[2], 0.0f, 1.0f);
+      data[0] = CLAMP (result[0], 0.0f, 1.0f);
+      data[1] = CLAMP (result[1], 0.0f, 1.0f);
+      data[2] = CLAMP (result[2], 0.0f, 1.0f);
 
-      input += 3;
-      output += 3;
+      data += 3;
     }
 }
 
