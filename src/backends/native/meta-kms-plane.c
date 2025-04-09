@@ -185,13 +185,9 @@ meta_kms_plane_update_set_color_encoding (MetaKmsPlane                   *plane,
                                           MetaKmsPlaneAssignment         *plane_assignment,
                                           MetaKmsPlaneYCbCrColorEncoding  encoding)
 {
-  MetaKmsProp *prop =
-    &plane->prop_table.props[META_KMS_PLANE_PROP_YCBCR_COLOR_ENCODING];
-
   g_return_if_fail (meta_kms_plane_is_color_encoding_handled (plane, encoding));
 
-  if (prop->value != encoding)
-    meta_kms_plane_assignment_set_color_encoding (plane_assignment, encoding);
+  meta_kms_plane_assignment_set_color_encoding (plane_assignment, encoding);
 }
 
 void
@@ -199,13 +195,9 @@ meta_kms_plane_update_set_color_range (MetaKmsPlane                *plane,
                                        MetaKmsPlaneAssignment      *plane_assignment,
                                        MetaKmsPlaneYCbCrColorRange  range)
 {
-  MetaKmsProp *prop =
-    &plane->prop_table.props[META_KMS_PLANE_YCBCR_COLOR_RANGE_LIMITED];
-
   g_return_if_fail (meta_kms_plane_is_color_range_handled (plane, range));
 
-  if (prop->value != range)
-    meta_kms_plane_assignment_set_color_range (plane_assignment, range);
+  meta_kms_plane_assignment_set_color_range (plane_assignment, range);
 }
 
 gboolean
