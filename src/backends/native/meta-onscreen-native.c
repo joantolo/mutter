@@ -40,6 +40,7 @@
 #include "backends/native/meta-drm-buffer-import.h"
 #include "backends/native/meta-drm-buffer.h"
 #include "backends/native/meta-frame-native.h"
+#include "backends/native/meta-kms-color-op.h"
 #include "backends/native/meta-kms-color-pipeline.h"
 #include "backends/native/meta-kms-connector.h"
 #include "backends/native/meta-kms-device.h"
@@ -621,9 +622,37 @@ apply_color_pipeline (MetaOnscreenNative     *onscreen_native,
     clutter_stage_view_get_scanout_color_state (stage_view);
   MetaKmsPlane *kms_plane =
     meta_crtc_kms_get_assigned_primary_plane (crtc_kms);
+  MetaKmsCrtc *kms_crtc;
   MetaKmsColorPipeline *color_pipeline;
+  GSList *color_ops, *l;
 
   color_pipeline = get_valid_color_pipeline (kms_plane);
+  color_ops = meta_kms_color_pipeline_get_color_ops (color_pipeline);
+
+  kms_crtc = meta_crtc_kms_get_kms_crtc (crtc_kms);
+
+  g_message ("JOAN: set plane color pipeline: %p", color_pipeline);
+
+  /* TODO: here it should be a function that gets the list of a struct with
+   * color ops changes  */
+  for (l = color_ops; l; l = l->next)
+    {
+      MetaKmsColorOpAssignment *color_op_assignment;
+      MetaKmsAssignColorOpFlags flags;
+      MetaKmsColorOp *color_op;
+
+      flags = META_KMS_ASSING_COLOR_OP_FLAG_BYPASS;
+
+      color_op = l->data;
+      color_op_assignment = meta_kms_update_assign_color_op (update,
+                                                             kms_crtc,
+                                                             color_op,
+                                                             flags);
+      /* TODO: Here it should be applied the color_op_assignment_type data:
+       * meta_kms_color_op_assignment_set_1d_curve (...) */
+
+    }
+
   meta_kms_plane_update_set_color_pipeline (kms_plane,
                                             plane_assignment,
                                             meta_kms_color_pipeline_get_id (
