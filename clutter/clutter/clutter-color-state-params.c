@@ -217,6 +217,7 @@ clutter_eotf_apply_pq (float input)
   c3 = 18.6875f;
   oo_m1 = 1.0f / 0.1593017f;
   oo_m2 = 1.0f / 78.84375f;
+  input = CLAMP (input, 0.0f, 1.0f);
   num = MAX (powf (input, oo_m2) - c1, 0.0f);
   den = c2 - c3 * powf (input, oo_m2);
   return powf (num / den, oo_m1);
@@ -232,6 +233,7 @@ clutter_eotf_apply_pq_inv (float input)
   c3 = 18.6875f;
   m1 = 0.1593017f;
   m2 = 78.84375f;
+  input = CLAMP (input, 0.0f, 1.0f);
   in_pow_m1 = powf (input, m1);
   num = c1 + c2 * in_pow_m1;
   den = 1.0f + c3 * in_pow_m1;
@@ -576,6 +578,8 @@ static const char pq_eotf_source[] =
   "  const float oo_m1 = 1.0 / 0.1593017578125;\n"
   "  const float oo_m2 = 1.0 / 78.84375;\n"
   "\n"
+  "  color = clamp (color, vec3 (0.0), vec3 (1.0));"
+  "\n"
   "  vec3 num = max (pow (color, vec3 (oo_m2)) - c1, vec3 (0.0));\n"
   "  vec3 den = c2 - c3 * pow (color, vec3 (oo_m2));\n"
   "\n"
@@ -598,6 +602,7 @@ static const char pq_inv_eotf_source[] =
   "  float c1 = 0.8359375;\n"
   "  float c2 = 18.8515625;\n"
   "  float c3 = 18.6875;\n"
+  "  color = clamp (color, vec3 (0.0), vec3 (1.0));"
   "  vec3 color_pow_m1 = pow (color, vec3 (m1));\n"
   "  vec3 num = vec3 (c1) + c2 * color_pow_m1;\n"
   "  vec3 denum = vec3 (1.0) + c3 * color_pow_m1;\n"
