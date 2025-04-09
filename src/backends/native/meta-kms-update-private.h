@@ -21,6 +21,7 @@
 #include <stdint.h>
 
 #include "backends/meta-output.h"
+#include "backends/native/meta-kms-color-op.h"
 #include "backends/native/meta-kms-crtc.h"
 #include "backends/native/meta-kms-plane-private.h"
 #include "backends/native/meta-kms-types.h"
@@ -87,6 +88,23 @@ typedef struct _MetaKmsPlaneAssignment
     MetaKmsPlaneColorPipeline value;
   } color_pipeline;
 } MetaKmsPlaneAssignment;
+
+typedef struct _MetaKmsColorOpAssignment
+{
+  MetaKmsUpdate *update;
+  MetaKmsColorOp *color_op;
+  MetaKmsAssignColorOpFlags flags;
+
+  MetaKmsColorOpType type;
+  union
+  {
+    MetaKmsColorOp1DCurve curve_1d;
+    MetaKmsColorOp1DLut lut_1d;
+    MetaKmsColorOpCtm3x4 ctm;
+    MetaKmsColorOpMultiplier mult;
+    MetaKmsColorOp3DLut lut_3d;
+  };
+} MetaKmsColorOpAssignment;
 
 typedef struct _MetaKmsModeSet
 {

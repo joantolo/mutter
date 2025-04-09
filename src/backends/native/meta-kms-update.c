@@ -44,6 +44,7 @@ struct _MetaKmsUpdate
   GList *connector_updates;
   GList *crtc_updates;
   GList *crtc_color_updates;
+  GList *color_op_assignments;
 
   MetaKmsCustomPageFlip *custom_page_flip;
 
@@ -339,6 +340,29 @@ meta_kms_update_unassign_plane (MetaKmsUpdate *update,
   return plane_assignment;
 }
 
+MetaKmsColorOpAssignment *
+meta_kms_update_assign_color_op (MetaKmsUpdate             *update,
+                                 MetaKmsCrtc               *crtc,
+                                 MetaKmsColorOp            *color_op,
+                                 MetaKmsAssignColorOpFlags  flags)
+{
+  MetaKmsColorOpAssignment *color_op_assignment;
+
+  g_assert (meta_kms_crtc_get_device (crtc) == update->device);
+
+  color_op_assignment = g_new0 (MetaKmsColorOpAssignment, 1);
+  *color_op_assignment = (MetaKmsColorOpAssignment) {
+    .update = update,
+    .color_op = color_op,
+    .flags = flags,
+  };
+
+  update->color_op_assignments = g_list_prepend (update->color_op_assignments,
+                                                 color_op_assignment);
+
+  return color_op_assignment;
+}
+
 void
 meta_kms_update_mode_set (MetaKmsUpdate *update,
                           MetaKmsCrtc   *crtc,
@@ -577,6 +601,12 @@ meta_kms_crtc_color_updates_free (MetaKmsCrtcColorUpdate *color_update)
   if (color_update->gamma.has_update)
     g_clear_pointer (&color_update->gamma.state, meta_gamma_lut_free);
   g_free (color_update);
+}
+
+static void
+meta_kms_color_op_assignment_free (MetaKmsColorOpAssignment *color_op_assignment)
+{
+  g_free (color_op_assignment);
 }
 
 void
@@ -1152,6 +1182,57 @@ merge_result_listeners_from (MetaKmsUpdate *update,
                    g_steal_pointer (&other_update->result_listeners));
 }
 
+static GList *
+find_color_op_assignment_link_for (MetaKmsUpdate  *update,
+                                   MetaKmsColorOp *color_op)
+{
+  GList *l;
+
+  for (l = update->color_op_assignments; l; l = l->next)
+    {
+      MetaKmsColorOpAssignment *color_op_assignment = l->data;
+
+      if (color_op_assignment->color_op == color_op)
+        return l;
+    }
+
+  return NULL;
+}
+
+static void
+merge_color_op_assignments_from (MetaKmsUpdate *update,
+                                 MetaKmsUpdate *other_update)
+{
+  while (other_update->color_op_assignments)
+    {
+      GList *l = other_update->color_op_assignments;
+      MetaKmsColorOpAssignment *color_op_assignment = l->data;
+      MetaKmsColorOp *color_op = color_op_assignment->color_op;
+      GList *el;
+
+      other_update->color_op_assignments =
+        g_list_remove_link (other_update->color_op_assignments, l);
+
+      el = find_color_op_assignment_link_for (update, color_op);
+      if (el)
+        {
+          meta_kms_color_op_assignment_free (el->data);
+          update->color_op_assignments =
+            g_list_insert_before_link (update->color_op_assignments, el, l);
+          update->color_op_assignments =
+            g_list_delete_link (update->color_op_assignments, el);
+        }
+      else
+        {
+          update->color_op_assignments =
+            g_list_insert_before_link (update->color_op_assignments,
+                                       update->color_op_assignments,
+                                       l);
+        }
+      color_op_assignment->update = update;
+    }
+}
+
 void
 meta_kms_update_merge_from (MetaKmsUpdate *update,
                             MetaKmsUpdate *other_update)
@@ -1166,6 +1247,7 @@ meta_kms_update_merge_from (MetaKmsUpdate *update,
   merge_custom_page_flip_from (update, other_update);
   merge_page_flip_listeners_from (update, other_update);
   merge_result_listeners_from (update, other_update);
+  merge_color_op_assignments_from (update, other_update);
 
   meta_kms_update_set_sync_fd (update, g_steal_fd (&other_update->sync_fd));
 }
@@ -1207,6 +1289,8 @@ meta_kms_update_free (MetaKmsUpdate *update)
   g_list_free_full (update->crtc_updates, g_free);
   g_list_free_full (update->crtc_color_updates,
                     (GDestroyNotify) meta_kms_crtc_color_updates_free);
+  g_list_free_full (update->color_op_assignments,
+                    (GDestroyNotify) meta_kms_color_op_assignment_free);
   g_clear_pointer (&update->custom_page_flip, meta_kms_custom_page_flip_free);
   g_clear_fd (&update->sync_fd, NULL);
 
@@ -1259,5 +1343,6 @@ meta_kms_update_is_empty (MetaKmsUpdate *update)
           !update->connector_updates &&
           !update->crtc_updates &&
           !update->crtc_color_updates &&
+          !update->color_op_assignments &&
           !update->custom_page_flip);
 }

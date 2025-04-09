@@ -42,6 +42,12 @@ typedef enum _MetaKmsAssignPlaneFlag
   META_KMS_ASSIGN_PLANE_FLAG_DISABLE_IMPLICIT_SYNC = 1 << 2,
 } MetaKmsAssignPlaneFlag;
 
+typedef enum _MetaKmsAssignColorOpFlags
+{
+  META_KMS_ASSING_COLOR_OP_FLAG_NONE = 0,
+  META_KMS_ASSING_COLOR_OP_FLAG_BYPASS = 1 << 0,
+} MetaKmsAssignColorOpFlags;
+
 struct _MetaKmsPageFlipListenerVtable
 {
   void (* flipped) (MetaKmsCrtc  *crtc,
@@ -179,6 +185,11 @@ MetaKmsPlaneAssignment * meta_kms_update_assign_plane (MetaKmsUpdate          *u
 MetaKmsPlaneAssignment * meta_kms_update_unassign_plane (MetaKmsUpdate *update,
                                                          MetaKmsCrtc   *crtc,
                                                          MetaKmsPlane  *plane);
+
+MetaKmsColorOpAssignment * meta_kms_update_assign_color_op (MetaKmsUpdate             *update,
+                                                            MetaKmsCrtc               *crtc,
+                                                            MetaKmsColorOp            *color_op,
+                                                            MetaKmsAssignColorOpFlags  flags);
 
 META_EXPORT_TEST
 void meta_kms_update_add_page_flip_listener (MetaKmsUpdate                       *update,

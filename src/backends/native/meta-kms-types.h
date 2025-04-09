@@ -29,6 +29,7 @@ typedef struct _MetaKmsColorOp MetaKmsColorOp;
 
 typedef struct _MetaKmsUpdate MetaKmsUpdate;
 typedef struct _MetaKmsPlaneAssignment MetaKmsPlaneAssignment;
+typedef struct _MetaKmsColorOpAssignment MetaKmsColorOpAssignment;
 typedef struct _MetaKmsModeSet MetaKmsModeSet;
 
 typedef struct _MetaKmsMode MetaKmsMode;
