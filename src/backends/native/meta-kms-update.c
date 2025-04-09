@@ -859,6 +859,12 @@ meta_kms_update_get_crtc_color_updates (MetaKmsUpdate *update)
   return update->crtc_color_updates;
 }
 
+GList *
+meta_kms_update_get_color_op_assignments (MetaKmsUpdate *update)
+{
+  return update->color_op_assignments;
+}
+
 MetaKmsDevice *
 meta_kms_update_get_device (MetaKmsUpdate *update)
 {

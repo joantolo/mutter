@@ -20,6 +20,7 @@
 #include "backends/native/meta-kms-impl-device-atomic.h"
 
 #include "backends/native/meta-backend-native-private.h"
+#include "backends/native/meta-kms-color-op-private.h"
 #include "backends/native/meta-kms-connector-private.h"
 #include "backends/native/meta-kms-crtc-private.h"
 #include "backends/native/meta-kms-device-private.h"
@@ -876,6 +877,82 @@ process_crtc_color_updates (MetaKmsImplDevice  *impl_device,
 }
 
 static gboolean
+add_color_op_property (MetaKmsImplDevice     *impl_device,
+                       MetaKmsColorOp        *color_op,
+                       drmModeAtomicReq      *req,
+                       MetaKmsColorOpProp     prop,
+                       uint64_t               value,
+                       GError               **error)
+{
+  int ret;
+  uint32_t prop_id;
+
+  prop_id = meta_kms_color_op_get_prop_id (color_op, prop);
+  if (!prop_id)
+    {
+      g_set_error (error, G_IO_ERROR, G_IO_ERROR_NOT_SUPPORTED,
+                   "ColorOp property '%s' not found on %u",
+                   meta_kms_color_op_get_prop_name (color_op, prop),
+                   meta_kms_color_op_get_id (color_op));
+      return FALSE;
+    }
+
+  value = meta_kms_color_op_get_prop_drm_value (color_op, prop, value);
+
+  meta_topic (META_DEBUG_KMS,
+              "[atomic] Setting ColorOp %u (%s) property '%s' to %"
+              G_GUINT64_FORMAT,
+              meta_kms_color_op_get_id (color_op),
+              meta_kms_impl_device_get_path (impl_device),
+              meta_kms_color_op_get_prop_name (color_op, prop),
+              value);
+
+  ret = drmModeAtomicAddProperty (req,
+                                  meta_kms_color_op_get_id (color_op),
+                                  prop_id,
+                                  value);
+  if (ret < 0)
+    {
+      g_set_error (error, G_IO_ERROR, g_io_error_from_errno (-ret),
+                   "drmModeAtomicAddProperty, ColorOp: %u, prop: %s (%u): %s",
+                   meta_kms_color_op_get_id (color_op),
+                   meta_kms_color_op_get_prop_name (color_op, prop),
+                   prop_id,
+                   g_strerror (-ret));
+      return FALSE;
+    }
+
+  return TRUE;
+}
+
+static gboolean
+process_color_op_assignment (MetaKmsImplDevice  *impl_device,
+                             MetaKmsUpdate      *update,
+                             drmModeAtomicReq   *req,
+                             GArray             *blob_ids,
+                             gpointer            update_entry,
+                             gpointer            user_data,
+                             GError            **error)
+{
+  MetaKmsColorOpAssignment *color_op_assignment = update_entry;
+  MetaKmsColorOp *color_op = color_op_assignment->color_op;
+  gboolean bypass =
+    !!(color_op_assignment->flags & META_KMS_ASSING_COLOR_OP_FLAG_BYPASS);
+
+  if (!add_color_op_property (impl_device,
+                              color_op, req,
+                              META_KMS_COLOR_OP_PROP_BYPASS,
+                              bypass,
+                              error))
+    return FALSE;
+
+  if (bypass)
+    return TRUE;
+
+  return TRUE;
+}
+
+static gboolean
 process_page_flip_listener (MetaKmsImplDevice  *impl_device,
                             MetaKmsUpdate      *update,
                             drmModeAtomicReq   *req,
@@ -1190,6 +1267,16 @@ meta_kms_impl_device_atomic_process_update (MetaKmsImplDevice *impl_device,
                         meta_kms_update_get_crtc_color_updates (update),
                         NULL,
                         process_crtc_color_updates,
+                        &error))
+    goto err;
+
+  if (!process_entries (impl_device,
+                        update,
+                        req,
+                        blob_ids,
+                        meta_kms_update_get_color_op_assignments (update),
+                        NULL,
+                        process_color_op_assignment,
                         &error))
     goto err;
 
