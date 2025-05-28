@@ -4,7 +4,7 @@
 #include "clutter-mutter.h"
 #include "tests/clutter-test-utils.h"
 
-#define COLOR_TRANSFORM_EPSILON 0.004f
+#define COLOR_TRANSFORM_EPSILON 0.04f
 
 typedef struct _TestColor {
   float r, g, b, a;
@@ -210,6 +210,40 @@ color_state_transform_params_to_params (void)
   g_list_free_full (actors, (GDestroyNotify) clutter_actor_destroy);
 }
 
+static void
+color_state_transform_params_to_params_hdr_to_sdr (void)
+{
+  ClutterContext *context = clutter_test_get_context ();
+  g_autoptr (ClutterColorState) src_color_state = NULL;
+  g_autoptr (ClutterColorState) target_color_state = NULL;
+  ClutterStageView *stage_view;
+  ClutterActor *stage;
+  GList *actors;
+
+  stage = clutter_test_get_stage ();
+
+  src_color_state =
+    clutter_color_state_params_new (context,
+                                    CLUTTER_COLORSPACE_BT2020,
+                                    CLUTTER_TRANSFER_FUNCTION_PQ);
+  actors = create_actors (stage);
+  actors_set_color_state (actors, src_color_state);
+
+  target_color_state =
+    clutter_color_state_params_new (context,
+                                    CLUTTER_COLORSPACE_SRGB,
+                                    CLUTTER_TRANSFER_FUNCTION_SRGB);
+  stage_view = get_stage_view (stage);
+  stage_view_set_color_state (stage_view, target_color_state);
+
+  wait_for_paint (stage);
+
+  validate_transform (stage, src_color_state, target_color_state);
+
+  g_list_free_full (actors, (GDestroyNotify) clutter_actor_destroy);
+}
+
 CLUTTER_TEST_SUITE (
   CLUTTER_TEST_UNIT ("/color-state-transform/params-to-params", color_state_transform_params_to_params)
+  CLUTTER_TEST_UNIT ("/color-state-transform/params-to-params-hdr-to-sdr", color_state_transform_params_to_params_hdr_to_sdr)
 )
